@@ -1,0 +1,21 @@
+# Build
+target/
+
+# Datenbank (Datei-H2)
+data/
+*.db
+*.mv.db
+*.trace.db
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+
+# Sonstiges
+*.log
+.DS_Store
