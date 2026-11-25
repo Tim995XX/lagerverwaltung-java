@@ -2,9 +2,12 @@ package de.hilpert.lager.web;
 
 import de.hilpert.lager.domain.TransportStatus;
 import de.hilpert.lager.service.TransportauftragService;
+import de.hilpert.lager.service.UmleitungErgebnis;
+import de.hilpert.lager.service.UmleitungService;
 import de.hilpert.lager.web.dto.PrioritaetRequest;
 import de.hilpert.lager.web.dto.ScanRequest;
 import de.hilpert.lager.web.dto.ScanResponse;
+import de.hilpert.lager.web.dto.SperrRequest;
 import de.hilpert.lager.web.dto.TransportauftragResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,9 +26,12 @@ import java.util.List;
 public class TransportauftragController {
 
     private final TransportauftragService transportauftragService;
+    private final UmleitungService umleitungService;
 
-    public TransportauftragController(TransportauftragService transportauftragService) {
+    public TransportauftragController(TransportauftragService transportauftragService,
+                                      UmleitungService umleitungService) {
         this.transportauftragService = transportauftragService;
+        this.umleitungService = umleitungService;
     }
 
     /** Liste in Abarbeitungsreihenfolge, optional gefiltert, z. B. ?status=OFFEN. */
@@ -49,6 +55,12 @@ public class TransportauftragController {
     public TransportauftragResponse scannen(@PathVariable Long id, @Valid @RequestBody ScanRequest request) {
         return TransportauftragResponse.von(transportauftragService.einlagerungScannen(
                 id, request.artikelNummer(), request.lagerplatzCode()));
+    }
+
+    /** Platz ist nicht nutzbar: sperren und neuen Platz suchen. */
+    @PostMapping("/{id}/umleiten")
+    public UmleitungErgebnis umleiten(@PathVariable Long id, @Valid @RequestBody SperrRequest request) {
+        return umleitungService.umleiten(id, request.grund());
     }
 
     @GetMapping("/{id}/scans")

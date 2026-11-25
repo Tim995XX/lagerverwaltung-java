@@ -91,7 +91,17 @@ public class Transportauftrag {
         wechsleStatus(TransportStatus.IN_ARBEIT, TransportStatus.ERLEDIGT);
     }
 
-    public void pruefeBereitZumScan() {
+    public void umleitenNach(String neuerOrt) {
+        pruefeInArbeitUndEinlagerung();
+        nachOrt = neuerOrt;
+    }
+
+    public void abbrechen() {
+        pruefeInArbeitUndEinlagerung();
+        status = TransportStatus.ABGEBROCHEN;
+    }
+
+    public void pruefeInArbeitUndEinlagerung() {
         if (art != TransportArt.EINLAGERUNG) {
             throw new UngueltigerStatusException("Transportauftrag " + id + " ist keine Einlagerung");
         }
@@ -106,7 +116,7 @@ public class Transportauftrag {
     }
 
     public void eingelagert() {
-        pruefeBereitZumScan();
+        pruefeInArbeitUndEinlagerung();
         bestandGebucht = true;
         status = TransportStatus.ERLEDIGT;
     }
@@ -117,8 +127,8 @@ public class Transportauftrag {
 
     /** Der Leitstand darf nur Aufträge umpriorisieren, die noch nicht erledigt sind. */
     public void aenderePrioritaet(Prioritaet neuePrioritaet) {
-        if (status == TransportStatus.ERLEDIGT) {
-            throw new UngueltigerStatusException("Erledigte Transportaufträge können nicht umpriorisiert werden");
+        if (status == TransportStatus.ERLEDIGT || status == TransportStatus.ABGEBROCHEN) {
+            throw new UngueltigerStatusException("Erledigte oder abgebrochene Transportaufträge können nicht umpriorisiert werden");
         }
         this.prioritaet = neuePrioritaet;
     }

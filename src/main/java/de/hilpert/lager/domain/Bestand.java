@@ -63,6 +63,15 @@ public class Bestand {
         reserviert += zugang;
     }
 
+    /** Die Ware kommt doch nicht auf diesen Platz. */
+    public void reservierungFreigeben(int anzahl) {
+        if (anzahl > reserviert) {
+            throw new IllegalArgumentException("Auf Platz " + lagerplatz.getCode() + " sind nur "
+                    + reserviert + " Stück reserviert");
+        }
+        reserviert -= anzahl;
+    }
+
     /** Die Ware steht auf dem Platz und wurde gescannt: aus der Reservierung wird Bestand. */
     public void einbuchen(int zugang) {
         if (zugang > reserviert) {

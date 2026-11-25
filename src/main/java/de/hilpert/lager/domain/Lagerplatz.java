@@ -32,6 +32,12 @@ public class Lagerplatz {
     private Integer hoeheMm;
     private Integer maxGewichtKg;
 
+    /** Gesperrte Plätze bekommen keine neue Ware; vorhandene darf abgeholt werden. */
+    private boolean gesperrt;
+
+    @Column(length = 200)
+    private String sperrgrund;
+
     protected Lagerplatz() {
         // für JPA
     }
@@ -78,6 +84,24 @@ public class Lagerplatz {
     /** Einfaches Maß für den Weg: Gang 1, Regal 1 liegt am nächsten an den Toren. */
     public int entfernung() {
         return gang + regal;
+    }
+
+    public void sperren(String grund) {
+        this.gesperrt = true;
+        this.sperrgrund = grund;
+    }
+
+    public void freigeben() {
+        this.gesperrt = false;
+        this.sperrgrund = null;
+    }
+
+    public boolean isGesperrt() {
+        return gesperrt;
+    }
+
+    public String getSperrgrund() {
+        return sperrgrund;
     }
 
     public Integer getLaengeMm() {

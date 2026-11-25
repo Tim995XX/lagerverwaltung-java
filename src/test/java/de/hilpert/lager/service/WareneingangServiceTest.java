@@ -16,9 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -41,14 +39,15 @@ class WareneingangServiceTest {
     @Mock TransportauftragRepository transportauftragRepository;
     @Mock KlaerfallRepository klaerfallRepository;
 
-    @Spy PlatzSuche platzSuche = new PlatzSuche();
-
-    @InjectMocks WareneingangService service;
+    private WareneingangService service;
 
     private final Artikel wasser = TestDaten.artikel("1001");
 
     @BeforeEach
     void setUp() {
+        service = new WareneingangService(artikelService, transportauftragRepository, klaerfallRepository,
+                new EinlagerPlanung(bestandRepository, lagerplatzRepository, transportauftragRepository,
+                        new PlatzSuche()));
         when(artikelService.finde("1001")).thenReturn(wasser);
         // save(...) gibt das übergebene Objekt zurück, wie es JPA auch tun würde
         lenient().when(bestandRepository.save(any())).thenAnswer(aufruf -> aufruf.getArgument(0));
@@ -123,6 +122,16 @@ class WareneingangServiceTest {
                 .thenReturn(List.of(new Bestand(wasser, TestDaten.platz(1, 1, 1, 50), 10)));
         when(lagerplatzRepository.findeLeerePlaetzeFuer(5))
                 .thenReturn(List.of(TestDaten.platz(1, 1, 2, 50), TestDaten.platz(2, 1, 1, 50)));
+
+        assertThat(service.einlagern("1001", 5).lagerplatz()).isEqualTo("02-01-1");
+    }
+
+    @Test
+    void gesperrterPlatzWirdNichtZugelagert() {
+        Bestand vorhanden = new Bestand(wasser, TestDaten.platz(1, 1, 1, 50), 10);
+        vorhanden.getLagerplatz().sperren("defekt");
+        when(bestandRepository.findByArtikelOrderByMengeAsc(wasser)).thenReturn(List.of(vorhanden));
+        when(lagerplatzRepository.findeLeerePlaetzeFuer(5)).thenReturn(List.of(TestDaten.platz(2, 1, 1, 50)));
 
         assertThat(service.einlagern("1001", 5).lagerplatz()).isEqualTo("02-01-1");
     }

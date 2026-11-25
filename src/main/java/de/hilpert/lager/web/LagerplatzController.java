@@ -5,8 +5,10 @@ import de.hilpert.lager.web.dto.BestandResponse;
 import de.hilpert.lager.web.dto.LagerplatzMasseRequest;
 import de.hilpert.lager.web.dto.LagerplatzRequest;
 import de.hilpert.lager.web.dto.LagerplatzResponse;
+import de.hilpert.lager.web.dto.SperrRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +47,16 @@ public class LagerplatzController {
     public LagerplatzResponse masse(@PathVariable String code, @Valid @RequestBody LagerplatzMasseRequest m) {
         return LagerplatzResponse.von(lagerplatzService.setzeMasse(code,
                 m.laengeMm(), m.breiteMm(), m.hoeheMm(), m.maxGewichtKg()));
+    }
+
+    @PutMapping("/lagerplaetze/{code}/sperre")
+    public LagerplatzResponse sperren(@PathVariable String code, @Valid @RequestBody SperrRequest request) {
+        return LagerplatzResponse.von(lagerplatzService.sperren(code, request.grund()));
+    }
+
+    @DeleteMapping("/lagerplaetze/{code}/sperre")
+    public LagerplatzResponse freigeben(@PathVariable String code) {
+        return LagerplatzResponse.von(lagerplatzService.freigeben(code));
     }
 
     @GetMapping("/bestaende")

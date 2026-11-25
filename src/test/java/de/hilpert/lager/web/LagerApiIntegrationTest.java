@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -220,6 +221,101 @@ class LagerApiIntegrationTest {
                 {"artikelNummer": "1001", "menge": 5}""").andExpect(status().isOk());
         mockMvc.perform(put("/api/lagerplaetze/01-01-1/masse")
                 .contentType(MediaType.APPLICATION_JSON).content(masse)).andExpect(status().isConflict());
+    }
+
+    @Test
+    void blockierterPlatzWirdGesperrtUndEinlagerungUmgeleitet() throws Exception {
+        long id = gestarteteEinlagerung(10);
+
+        umleiten(id).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ergebnis").value("UMGELEITET"))
+                .andExpect(jsonPath("$.gesperrterPlatz").value("01-01-1"))
+                .andExpect(jsonPath("$.neuerPlatz").value("02-01-1"));
+
+        mockMvc.perform(get("/api/bestaende"))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].lagerplatz").value("02-01-1"))
+                .andExpect(jsonPath("$[0].reserviert").value(10));
+        mockMvc.perform(get("/api/klaerfaelle"))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].grund").value("PLATZ_BLOCKIERT"));
+
+        scan(id, "1001", "01-01-1").andExpect(status().isConflict());
+        scan(id, "1001", "02-01-1").andExpect(status().isOk());
+        umleiten(id).andExpect(status().isConflict()); // schon erledigt
+
+        // Nach der Freigabe wird der Platz wieder benutzt
+        mockMvc.perform(delete("/api/lagerplaetze/01-01-1/sperre"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.gesperrt").value(false));
+        postJson("/api/artikel", """
+                {"artikelNummer": "1002", "bezeichnung": "Saft",
+                 "masse": {"laengeMm": 100, "breiteMm": 100, "hoeheMm": 100, "gewichtGramm": 1000}}""");
+        postJson("/api/wareneingaenge", """
+                {"artikelNummer": "1002", "menge": 5}""")
+                .andExpect(jsonPath("$.lagerplatz").value("01-01-1"));
+    }
+
+    @Test
+    void ohneErsatzplatzGehtDieWareAufDenKlaerplatz() throws Exception {
+        long id = gestarteteEinlagerung(10);
+        mockMvc.perform(put("/api/lagerplaetze/02-01-1/sperre").contentType(MediaType.APPLICATION_JSON).content("""
+                {"grund": "Wartung"}""")).andExpect(status().isOk());
+
+        umleiten(id).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ergebnis").value("KLAERPLATZ"));
+
+        mockMvc.perform(get("/api/transportauftraege").param("status", "ABGEBROCHEN"))
+                .andExpect(jsonPath("$", hasSize(1)));
+        mockMvc.perform(get("/api/bestaende")).andExpect(jsonPath("$", hasSize(0)));
+        mockMvc.perform(get("/api/klaerfaelle")).andExpect(jsonPath("$", hasSize(2)));
+        scan(id, "1001", "01-01-1").andExpect(status().isConflict());
+    }
+
+    @Test
+    void zweiterFahrerAufGesperrtemPlatzMussAuchUmleiten() throws Exception {
+        long erste = gestarteteEinlagerung(10);
+        postJson("/api/wareneingaenge", """
+                {"artikelNummer": "1001", "menge": 5}""")
+                .andExpect(jsonPath("$.lagerplatz").value("01-01-1"));
+        long zweite = transportauftragRepository.findAll().stream()
+                .mapToLong(t -> t.getId()).filter(t -> t != erste).findFirst().orElseThrow();
+        mockMvc.perform(post("/api/transportauftraege/{id}/start", zweite)).andExpect(status().isOk());
+
+        umleiten(erste).andExpect(status().isOk());
+        scan(zweite, "1001", "01-01-1").andExpect(status().isConflict());
+        umleiten(zweite).andExpect(jsonPath("$.neuerPlatz").value("02-01-1"));
+
+        scan(erste, "1001", "02-01-1").andExpect(status().isOk());
+        scan(zweite, "1001", "02-01-1").andExpect(status().isOk());
+        mockMvc.perform(get("/api/bestaende"))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].menge").value(15))
+                .andExpect(jsonPath("$[0].reserviert").value(0));
+        mockMvc.perform(get("/api/klaerfaelle")).andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
+    void umleitenBrauchtGrundUndGestarteteEinlagerung() throws Exception {
+        postJson("/api/wareneingaenge", """
+                {"artikelNummer": "1001", "menge": 10}""").andExpect(status().isOk());
+        long id = transportauftragRepository.findAll().getFirst().getId();
+
+        umleiten(id).andExpect(status().isConflict());
+        postJson("/api/transportauftraege/" + id + "/umleiten", "{}").andExpect(status().isBadRequest());
+        umleiten(999_999).andExpect(status().isNotFound());
+    }
+
+    private long gestarteteEinlagerung(int menge) throws Exception {
+        postJson("/api/wareneingaenge", """
+                {"artikelNummer": "1001", "menge": %d}""".formatted(menge)).andExpect(status().isOk());
+        long id = transportauftragRepository.findAll().getFirst().getId();
+        mockMvc.perform(post("/api/transportauftraege/{id}/start", id)).andExpect(status().isOk());
+        return id;
+    }
+
+    private ResultActions umleiten(long id) throws Exception {
+        return postJson("/api/transportauftraege/" + id + "/umleiten", """
+                {"grund": "Regalboden beschädigt"}""");
     }
 
     private ResultActions scan(long id, String artikel, String platz) throws Exception {

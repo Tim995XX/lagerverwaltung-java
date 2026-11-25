@@ -34,6 +34,7 @@ Kommissionierauftrag ──▶ Bestand reicht für alle Positionen?
                        └── nein ──▶ nichts buchen, Auftrag IN_KLAERUNG + Klärfall BESTAND_NICHT_AUSREICHEND
 
 Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss (Auslagerung) / scan (Einlagerung)──▶ ERLEDIGT
+                   IN_ARBEIT ──Platz blockiert, kein Ersatz──▶ ABGEBROCHEN (Ware auf Klärplatz)
                    Reihenfolge: Priorität (HOCH, NORMAL, NIEDRIG), dann ältester zuerst
 ```
 
@@ -49,6 +50,9 @@ Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss (Auslage
 - **Scan-Bestätigung:** Der Platz wird nur reserviert. Erst wenn Ware und Platz gescannt sind und
   zum Auftrag passen, entsteht Bestand. Ein falscher Scan ergibt `409`, bucht nichts und wird
   protokolliert. Ohne Scan lässt sich eine Einlagerung nicht abschließen.
+- **Umleiten:** Meldet der Fahrer einen blockierten Platz, wird dieser gesperrt, die Reservierung
+  gelöst und ein neuer Platz gesucht; der Leitstand bekommt einen Klärfall. Ohne Ersatzplatz geht
+  die Ware auf den Klärplatz. Der Leitstand kann Plätze auch selbst sperren und wieder freigeben.
 - **Kommissionierung:** mehrere Positionen pro Auftrag, Mengen desselben Artikels werden
   zusammengezählt. Gebucht wird nur, wenn **alle** Positionen bedient werden können.
   Ausgelagert wird von den kleinsten Beständen zuerst, damit angebrochene Plätze leer werden.
@@ -102,6 +106,9 @@ zusammenpassen (`ddl-auto=validate`).
 - **Falscher Scan ohne Rollback:** `noRollbackFor` sorgt dafür, dass der Protokolleintrag trotz
   Exception erhalten bleibt.
 - **Platzsuche in Java statt SQL:** gut testbar. Bei sehr vielen Plätzen müsste mehr in die Datenbank.
+- **Umleiten in einer Transaktion:** Sperre, Freigabe, neue Reservierung und neues Ziel gelten
+  zusammen oder gar nicht.
+- **Sperre nur für Einlagerungen:** Ware auf einem gesperrten Platz darf weiter abgeholt werden.
 - **Grenze des Scans:** Er belegt, welche Codes gescannt wurden, nicht wo die Ware wirklich steht.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
   mehrere Plätze verteilt; Auslagerungen werden sofort abgebucht und ohne Scan
@@ -151,6 +158,10 @@ curl -s -X POST localhost:8080/api/transportauftraege/4/start
 curl -s -X POST localhost:8080/api/transportauftraege/4/scan \
   -H 'Content-Type: application/json' -d '{"artikelNummer": "1002", "lagerplatzCode": "01-01-2"}'
 
+# Platz beschädigt? Vor dem Scan umleiten (gleicher Aufruf statt des Scans)
+# curl -s -X POST localhost:8080/api/transportauftraege/4/umleiten \
+#   -H 'Content-Type: application/json' -d '{"grund": "Regalboden beschädigt"}'
+
 # Zu groß für jeden Platz → Klärplatz
 curl -s -X POST localhost:8080/api/wareneingaenge \
   -H 'Content-Type: application/json' \
@@ -193,6 +204,8 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 | `/api/transportauftraege` | GET (`?status=`) | Liste in Abarbeitungsreihenfolge |
 | `/api/transportauftraege/{id}/start` \| `/abschluss` | POST | Statuswechsel |
 | `/api/transportauftraege/{id}/scan`, `/scans` | POST, GET | Einlagerung per Scan bestätigen, Protokoll |
+| `/api/transportauftraege/{id}/umleiten` | POST | Platz sperren, neuen suchen |
+| `/api/lagerplaetze/{code}/sperre` | PUT, DELETE | Platz sperren, freigeben |
 | `/api/artikel/{nr}/masse`, `/api/lagerplaetze/{code}/masse` | PUT | Maße nachtragen |
 | `/api/transportauftraege/{id}/prioritaet` | PUT | Umpriorisieren |
 | `/api/klaerfaelle`, `/{id}/erledigen` | GET (`?erledigt=`), POST | Klärplatz |
@@ -206,7 +219,7 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
 räumt es danach wieder weg.
 
-42 Tests, alle grün:
+47 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
@@ -214,7 +227,8 @@ räumt es danach wieder weg.
 - **Repository-Test** (`@DataJpaTest`): die eigene JPQL-Abfrage für leere Plätze gegen PostgreSQL.
 - **Schema-Test:** Flyway-Migration ist gelaufen; negativer Bestand und doppelt belegte Plätze
   werden von der Datenbank abgelehnt.
-- **Platzsuche und Scan:** Drehen, Stapeln, Traglast, Reihenfolge; falscher und doppelter Scan.
+- **Platzsuche und Scan:** Drehen, Stapeln, Traglast, Reihenfolge; falscher und doppelter Scan;
+  Umleiten mit und ohne Ersatzplatz, zwei Fahrer am selben gesperrten Platz.
 - **Migrationstest:** V2 läuft auch auf einer Datenbank mit V1-Daten.
 - **Test gleichzeitiger Buchungen:** Zwei Wareneingänge wollen denselben leeren Platz; die zweite
   Anfrage bekommt `409`, bucht nichts und gelingt beim nächsten Versuch.
@@ -235,11 +249,9 @@ räumt es danach wieder weg.
 
 ## Mögliche Erweiterungen
 
-- Einlagerung abbrechen oder auf einen anderen Platz umleiten, wenn der Platz nicht nutzbar ist
 - Auslagerungen ebenfalls per Scan bestätigen
 - Anlieferungen auf mehrere Plätze verteilen
 - Klärfall „erneut versuchen“, z. B. Kommissionierauftrag nach Nachschub neu prüfen
-- Lagerplätze sperren (z. B. Regal beschädigt) und bei der Platzsuche auslassen
 - Authentifizierung (Spring Security) und Rollen, z. B. Leitstand vs. Staplerfahrer
 
 ## Hinweis

@@ -38,13 +38,31 @@ public class LagerplatzService {
     /** Maße nachtragen, solange der Platz noch keine hat oder nicht belegt bzw. reserviert ist. */
     @Transactional
     public Lagerplatz setzeMasse(String code, int laengeMm, int breiteMm, int hoeheMm, int maxGewichtKg) {
-        Lagerplatz platz = lagerplatzRepository.findByCode(code)
-                .orElseThrow(() -> new NichtGefundenException("Lagerplatz " + code + " nicht gefunden"));
+        Lagerplatz platz = finde(code);
         if (platz.hatMasse() && bestandRepository.findByLagerplatzCode(code).isPresent()) {
             throw new KonfliktException("Lagerplatz " + code + " ist belegt, Maße sind gesperrt");
         }
         platz.setzeMasse(laengeMm, breiteMm, hoeheMm, maxGewichtKg);
         return platz;
+    }
+
+    @Transactional
+    public Lagerplatz sperren(String code, String grund) {
+        Lagerplatz platz = finde(code);
+        platz.sperren(grund);
+        return platz;
+    }
+
+    @Transactional
+    public Lagerplatz freigeben(String code) {
+        Lagerplatz platz = finde(code);
+        platz.freigeben();
+        return platz;
+    }
+
+    private Lagerplatz finde(String code) {
+        return lagerplatzRepository.findByCode(code)
+                .orElseThrow(() -> new NichtGefundenException("Lagerplatz " + code + " nicht gefunden"));
     }
 
     @Transactional(readOnly = true)

@@ -16,12 +16,13 @@ public interface LagerplatzRepository extends JpaRepository<Lagerplatz, Long> {
     boolean existsByCode(String code);
 
     /**
-     * Vorauswahl: leere, nicht reservierte Plätze mit ausreichender Obergrenze.
+     * Vorauswahl: leere, nicht reservierte und nicht gesperrte Plätze mit ausreichender Obergrenze.
      * Maße, Gewicht und Reihenfolge prüft danach die Platzsuche.
      */
     @Query("""
             select p from Lagerplatz p
             where p.kapazitaet >= :menge
+              and p.gesperrt = false
               and not exists (select b from Bestand b where b.lagerplatz = p)
             order by p.kapazitaet asc, p.code asc
             """)

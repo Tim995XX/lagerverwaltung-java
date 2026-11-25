@@ -6,6 +6,7 @@ import de.hilpert.lager.domain.Prioritaet;
 import de.hilpert.lager.domain.Scan;
 import de.hilpert.lager.domain.TransportStatus;
 import de.hilpert.lager.domain.Transportauftrag;
+import de.hilpert.lager.fehler.KonfliktException;
 import de.hilpert.lager.fehler.NichtGefundenException;
 import de.hilpert.lager.repository.BestandRepository;
 import de.hilpert.lager.repository.ScanRepository;
@@ -69,7 +70,7 @@ public class TransportauftragService {
     @Transactional(noRollbackFor = FalscherScanException.class)
     public Transportauftrag einlagerungScannen(Long id, String artikelNummer, String lagerplatzCode) {
         Transportauftrag auftrag = finde(id);
-        auftrag.pruefeBereitZumScan();
+        auftrag.pruefeInArbeitUndEinlagerung();
 
         String artikel = artikelNummer.strip();
         String platz = lagerplatzCode.strip();
@@ -83,6 +84,9 @@ public class TransportauftragService {
         if (!auftrag.isBestandGebucht()) {
             Bestand bestand = bestandRepository.findByLagerplatzCode(platz)
                     .orElseThrow(() -> new IllegalStateException("Keine Reservierung auf Platz " + platz));
+            if (bestand.getLagerplatz().isGesperrt()) {
+                throw new KonfliktException("Platz " + platz + " ist gesperrt, bitte umleiten");
+            }
             bestand.einbuchen(auftrag.getMenge());
         }
         auftrag.eingelagert();
