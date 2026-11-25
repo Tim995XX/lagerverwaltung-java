@@ -1,5 +1,7 @@
 # lagerverwaltung-java
 
+[![CI](https://github.com/Tim995XX/lagerverwaltung-java/actions/workflows/ci.yml/badge.svg)](https://github.com/Tim995XX/lagerverwaltung-java/actions/workflows/ci.yml)
+
 Eine kleine Lagerverwaltung als REST-API mit **Java 21** und **Spring Boot**: Artikel und
 Lagerplätze anlegen, Ware einlagern, Kommissionieraufträge auslagern, Transportaufträge nach
 Priorität abarbeiten – und alles, was das System nicht automatisch buchen kann, landet auf dem
