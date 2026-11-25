@@ -9,7 +9,7 @@ Priorität abarbeiten – und alles, was das System nicht automatisch buchen kan
 
 ## Motivation
 
-Vor meiner Umschulung habe ich vier Jahre im Leitstand eines Lagers gearbeitet, mit einem
+Vor meiner Umschulung habe ich knapp anderthalb Jahre im Leitstand eines Lagers gearbeitet, mit einem
 Lagerverwaltungssystem und SAP. Ein großer Teil der Arbeit waren die Fälle, in denen die
 Automatik nicht weiterkam: Klärplatzmeldungen, Buchungsfehler, Transportaufträge, die
 umpriorisiert werden mussten, weil ein Lkw wartet.
