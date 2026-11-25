@@ -1,16 +1,19 @@
 package de.hilpert.lager.repository;
 
+import de.hilpert.lager.PostgresTestKonfiguration;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.Bestand;
 import de.hilpert.lager.domain.Lagerplatz;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Prüft die eigene JPQL-Abfrage gegen eine echte (In-Memory-)H2-Datenbank. */
+/** Prüft die eigene JPQL-Abfrage gegen ein echtes PostgreSQL. */
 @DataJpaTest
+@Import(PostgresTestKonfiguration.class)
 class LagerplatzRepositoryTest {
 
     @Autowired LagerplatzRepository lagerplatzRepository;

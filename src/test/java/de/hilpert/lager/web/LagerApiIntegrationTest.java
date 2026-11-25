@@ -1,5 +1,6 @@
 package de.hilpert.lager.web;
 
+import de.hilpert.lager.PostgresTestKonfiguration;
 import de.hilpert.lager.repository.ArtikelRepository;
 import de.hilpert.lager.repository.BestandRepository;
 import de.hilpert.lager.repository.KlaerfallRepository;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -23,11 +25,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Integrationstests: kompletter Spring-Kontext mit In-Memory-H2,
+ * Integrationstests: kompletter Spring-Kontext mit PostgreSQL (Testcontainers),
  * Aufrufe laufen über MockMvc durch Controller, Service und Repository.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(PostgresTestKonfiguration.class)
 class LagerApiIntegrationTest {
 
     @Autowired MockMvc mockMvc;

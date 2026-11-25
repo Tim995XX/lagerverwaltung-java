@@ -16,12 +16,10 @@ RUN ./mvnw -q package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-RUN useradd --system --create-home lager && mkdir -p /app/data && chown lager /app/data
+RUN useradd --system --create-home lager
 COPY --from=build /build/target/lagerverwaltung-*.jar app.jar
 
 USER lager
 EXPOSE 8080
-# Datei-H2 liegt unter /app/data – als Volume einbinden, damit Daten einen Neustart überleben
-VOLUME /app/data
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -1,10 +1,30 @@
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: lager
+      POSTGRES_USER: lager
+      POSTGRES_PASSWORD: ${LAGER_DB_PASSWORT:-lager}
+    ports:
+      - "127.0.0.1:5432:5432"   # nur vom eigenen Rechner erreichbar
+    volumes:
+      - pgdaten:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U lager -d lager"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   lager:
     build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      LAGER_DB_URL: jdbc:postgresql://db:5432/lager
+      LAGER_DB_PASSWORT: ${LAGER_DB_PASSWORT:-lager}
     ports:
       - "8080:8080"
-    volumes:
-      - lagerdaten:/app/data
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:8080/actuator/health"]
       interval: 10s
@@ -13,4 +33,4 @@ services:
       start_period: 30s
 
 volumes:
-  lagerdaten:
+  pgdaten:

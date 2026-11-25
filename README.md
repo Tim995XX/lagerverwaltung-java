@@ -66,7 +66,9 @@ Klassische Schichten: Controller → Service → Repository → Datenbank.
 | `domain` | JPA-Entities und Enums; Regeln, die nur ein Objekt betreffen (z. B. Statuswechsel), stehen direkt in der Entity |
 | `fehler` | Fachliche Exceptions (`NichtGefundenException`, `KonfliktException`) |
 
-Datenbank ist eine **Datei-H2** unter `./data/`, das Schema erzeugt Hibernate aus den Entities.
+Datenbank ist **PostgreSQL**. Das Schema liegt als SQL in `src/main/resources/db/migration` und
+wird beim Start von **Flyway** angewendet. Hibernate prüft nur noch, ob Entities und Tabellen
+zusammenpassen (`ddl-auto=validate`).
 
 ### Entscheidungen und bewusste Vereinfachungen
 
@@ -81,24 +83,33 @@ Datenbank ist eine **Datei-H2** unter `./data/`, das Schema erzeugt Hibernate au
   (lesbar in der Datenbank), alphabetisch käme aber HOCH, NIEDRIG, NORMAL heraus.
 - **Optimistisches Sperren** (`@Version`) auf dem Bestand: Ändern zwei Anfragen gleichzeitig
   denselben Bestand, bekommt die zweite `409` statt einen falschen Bestand zu erzeugen.
+- **Migrationen statt `ddl-auto=update`:** Jede Schemaänderung ist eine nummerierte SQL-Datei, im
+  Git nachvollziehbar und überall in derselben Reihenfolge ausgeführt.
+- **Regeln auch in der Datenbank:** Check-, Unique- und Fremdschlüssel-Constraints lehnen z. B.
+  negativen Bestand selbst dann ab, wenn der Java-Code einen Fehler hat.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
   mehrere Plätze verteilt; der Bestand wird sofort gebucht und nicht erst, wenn der
   Transport quittiert ist; keine Chargen, kein MHD, keine Benutzer.
 
 ## Starten
 
-**Lokal** (JDK 21; Maven muss nicht installiert sein, der Wrapper lädt es):
+**Lokal** (JDK 21 und Docker; Maven muss nicht installiert sein, der Wrapper lädt es):
 
 ```bash
+docker compose up -d db      # nur PostgreSQL
 ./mvnw spring-boot:run
 ```
 
-**Mit Docker:**
+**Alles mit Docker** (Anwendung und PostgreSQL):
 
 ```bash
 docker compose up --build -d
-docker compose down          # Daten bleiben im Volume "lagerdaten"
+docker compose down          # Daten bleiben im Volume "pgdaten"
 ```
+
+Die Zugangsdaten sind Vorgaben für die lokale Entwicklung und lassen sich über `LAGER_DB_URL`,
+`LAGER_DB_BENUTZER` und `LAGER_DB_PASSWORT` ersetzen (Compose: nur das Passwort, vor dem ersten
+Start setzen).
 
 Danach:
 
@@ -168,12 +179,17 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 ./mvnw verify
 ```
 
-22 Tests, alle grün:
+Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
+räumt es danach wieder weg.
+
+25 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
   Fehlmenge → Klärfall ohne Buchung, zusammengezählte Positionen; Sortierung der Transporte.
-- **Repository-Test** (`@DataJpaTest`): die eigene JPQL-Abfrage für leere Plätze gegen H2.
+- **Repository-Test** (`@DataJpaTest`): die eigene JPQL-Abfrage für leere Plätze gegen PostgreSQL.
+- **Schema-Test:** Flyway-Migration ist gelaufen; negativer Bestand und doppelt belegte Plätze
+  werden von der Datenbank abgelehnt.
 - **Integrationstests** (`@SpringBootTest` + MockMvc): kompletter Ablauf von Wareneingang
   über Kommissionierung bis zum Transport, Klärplatz, und die HTTP-Codes bei
   ungültigen Eingaben (400), unbekannten Artikeln (404) und Konflikten (409).
@@ -195,9 +211,7 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 - Anlieferungen auf mehrere Plätze verteilen
 - Klärfall „erneut versuchen“, z. B. Kommissionierauftrag nach Nachschub neu prüfen
 - Lagerplätze sperren (z. B. Regal beschädigt) und bei der Platzsuche auslassen
-- Flyway-Migrationen statt `ddl-auto=update`, PostgreSQL statt H2
 - Authentifizierung (Spring Security) und Rollen, z. B. Leitstand vs. Staplerfahrer
-- GitHub Actions für `./mvnw verify` und den Docker-Build
 
 ## Hinweis
 
