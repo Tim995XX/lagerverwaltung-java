@@ -1,5 +1,6 @@
 package de.hilpert.lager.repository;
 
+import de.hilpert.lager.TestDaten;
 import de.hilpert.lager.PostgresTestKonfiguration;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.Bestand;
@@ -22,11 +23,11 @@ class LagerplatzRepositoryTest {
 
     @Test
     void findetNurLeerePlaetzeMitGenugKapazitaetKleinsterZuerst() {
-        Lagerplatz gross = lagerplatzRepository.save(new Lagerplatz(2, 1, 1, 120));
-        Lagerplatz klein = lagerplatzRepository.save(new Lagerplatz(1, 1, 1, 40));
-        Lagerplatz zuKlein = lagerplatzRepository.save(new Lagerplatz(1, 1, 2, 10));
-        Lagerplatz belegt = lagerplatzRepository.save(new Lagerplatz(1, 2, 1, 40));
-        Artikel artikel = artikelRepository.save(new Artikel("1001", "Wasser"));
+        Lagerplatz gross = lagerplatzRepository.save(TestDaten.platz(2, 1, 1, 120));
+        Lagerplatz klein = lagerplatzRepository.save(TestDaten.platz(1, 1, 1, 40));
+        Lagerplatz zuKlein = lagerplatzRepository.save(TestDaten.platz(1, 1, 2, 10));
+        Lagerplatz belegt = lagerplatzRepository.save(TestDaten.platz(1, 2, 1, 40));
+        Artikel artikel = artikelRepository.save(TestDaten.artikel("1001"));
         bestandRepository.save(new Bestand(artikel, belegt, 5));
 
         assertThat(lagerplatzRepository.findeLeerePlaetzeFuer(30))

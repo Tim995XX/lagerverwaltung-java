@@ -5,16 +5,19 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface LagerplatzRepository extends JpaRepository<Lagerplatz, Long> {
 
     List<Lagerplatz> findAllByOrderByCodeAsc();
 
+    Optional<Lagerplatz> findByCode(String code);
+
     boolean existsByCode(String code);
 
     /**
-     * Leere Plätze, auf die die Menge passt – der kleinste passende zuerst ("Best Fit"),
-     * damit große Plätze für große Mengen frei bleiben.
+     * Vorauswahl: leere, nicht reservierte Plätze mit ausreichender Obergrenze.
+     * Maße, Gewicht und Reihenfolge prüft danach die Platzsuche.
      */
     @Query("""
             select p from Lagerplatz p

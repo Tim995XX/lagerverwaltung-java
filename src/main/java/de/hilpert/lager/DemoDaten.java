@@ -1,7 +1,10 @@
 package de.hilpert.lager;
 
+import de.hilpert.lager.domain.Umschlag;
 import de.hilpert.lager.service.ArtikelService;
 import de.hilpert.lager.service.LagerplatzService;
+import de.hilpert.lager.service.TransportauftragService;
+import de.hilpert.lager.service.WareneingangErgebnis;
 import de.hilpert.lager.service.WareneingangService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,12 +27,15 @@ public class DemoDaten implements ApplicationRunner {
     private final ArtikelService artikelService;
     private final LagerplatzService lagerplatzService;
     private final WareneingangService wareneingangService;
+    private final TransportauftragService transportauftragService;
 
     public DemoDaten(ArtikelService artikelService, LagerplatzService lagerplatzService,
-                     WareneingangService wareneingangService) {
+                     WareneingangService wareneingangService,
+                     TransportauftragService transportauftragService) {
         this.artikelService = artikelService;
         this.lagerplatzService = lagerplatzService;
         this.wareneingangService = wareneingangService;
+        this.transportauftragService = transportauftragService;
     }
 
     @Override
@@ -38,21 +44,27 @@ public class DemoDaten implements ApplicationRunner {
             return;
         }
 
-        artikelService.anlegen("1001", "Mineralwasser 6x1,5 l");
-        artikelService.anlegen("1002", "Apfelsaft 6x1 l");
-        artikelService.anlegen("2001", "Haferflocken 500 g");
+        artikelService.anlegen("1001", "Mineralwasser 6x1,5 l", 270, 180, 330, 9_300, Umschlag.SCHNELL);
+        artikelService.anlegen("1002", "Apfelsaft 6x1 l", 240, 160, 280, 6_300, Umschlag.MITTEL);
+        artikelService.anlegen("2001", "Haferflocken 500 g", 120, 80, 200, 520, Umschlag.LANGSAM);
 
         // Gang 1: kleine Plätze (40 Stück), Gang 2: große Plätze (120 Stück)
         for (int regal = 1; regal <= 3; regal++) {
             for (int ebene = 1; ebene <= 2; ebene++) {
-                lagerplatzService.anlegen(1, regal, ebene, 40);
-                lagerplatzService.anlegen(2, regal, ebene, 120);
+                lagerplatzService.anlegen(1, regal, ebene, 40, 1200, 800, 700, 500);
+                lagerplatzService.anlegen(2, regal, ebene, 120, 1200, 800, 2400, 1000);
             }
         }
 
-        wareneingangService.einlagern("1001", 100);
-        wareneingangService.einlagern("1002", 30);
-        wareneingangService.einlagern("2001", 25);
+        einlagernUndScannen("1001", 100);
+        einlagernUndScannen("1002", 30);
+        einlagernUndScannen("2001", 25);
         log.info("Demodaten angelegt: 3 Artikel, 12 Lagerplätze, 3 Wareneingänge");
+    }
+
+    private void einlagernUndScannen(String artikelNummer, int menge) {
+        WareneingangErgebnis ergebnis = wareneingangService.einlagern(artikelNummer, menge);
+        transportauftragService.starten(ergebnis.transportauftragId());
+        transportauftragService.einlagerungScannen(ergebnis.transportauftragId(), artikelNummer, ergebnis.lagerplatz());
     }
 }

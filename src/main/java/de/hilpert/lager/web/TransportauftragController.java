@@ -3,6 +3,8 @@ package de.hilpert.lager.web;
 import de.hilpert.lager.domain.TransportStatus;
 import de.hilpert.lager.service.TransportauftragService;
 import de.hilpert.lager.web.dto.PrioritaetRequest;
+import de.hilpert.lager.web.dto.ScanRequest;
+import de.hilpert.lager.web.dto.ScanResponse;
 import de.hilpert.lager.web.dto.TransportauftragResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,6 +42,18 @@ public class TransportauftragController {
     @PostMapping("/{id}/abschluss")
     public TransportauftragResponse abschliessen(@PathVariable Long id) {
         return TransportauftragResponse.von(transportauftragService.abschliessen(id));
+    }
+
+    /** Einlagerung bestätigen: Barcode der Ware und Barcode des Platzes. */
+    @PostMapping("/{id}/scan")
+    public TransportauftragResponse scannen(@PathVariable Long id, @Valid @RequestBody ScanRequest request) {
+        return TransportauftragResponse.von(transportauftragService.einlagerungScannen(
+                id, request.artikelNummer(), request.lagerplatzCode()));
+    }
+
+    @GetMapping("/{id}/scans")
+    public List<ScanResponse> scans(@PathVariable Long id) {
+        return transportauftragService.scans(id).stream().map(ScanResponse::von).toList();
     }
 
     @PutMapping("/{id}/prioritaet")

@@ -109,6 +109,9 @@ public class KommissionierService {
             if (rest == 0) {
                 break;
             }
+            if (bestand.getMenge() == 0) {
+                continue; // nur reserviert, die Ware ist noch unterwegs
+            }
             int entnahme = Math.min(rest, bestand.getMenge());
             bestand.abbuchen(entnahme);
             rest -= entnahme;
@@ -118,7 +121,7 @@ public class KommissionierService {
                     bestand.getLagerplatz().getCode(), Transportauftrag.WARENAUSGANG,
                     auftrag.getPrioritaet(), auftrag.getId()));
 
-            if (bestand.getMenge() == 0) {
+            if (bestand.istLeer()) {
                 bestandRepository.delete(bestand); // Platz ist wieder frei
             }
         }

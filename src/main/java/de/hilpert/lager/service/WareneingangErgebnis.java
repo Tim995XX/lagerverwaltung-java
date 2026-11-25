@@ -8,18 +8,20 @@ public record WareneingangErgebnis(
         Ergebnis ergebnis,
         String lagerplatz,
         Long transportauftragId,
-        Long klaerfallId) {
+        Long klaerfallId,
+        String begruendung) {
 
     public enum Ergebnis {
-        EINGELAGERT,
+        /** Platz reserviert; Bestand entsteht erst durch den Scan am Platz. */
+        PLATZ_RESERVIERT,
         KLAERPLATZ
     }
 
-    static WareneingangErgebnis eingelagert(String lagerplatz, Long transportauftragId) {
-        return new WareneingangErgebnis(Ergebnis.EINGELAGERT, lagerplatz, transportauftragId, null);
+    static WareneingangErgebnis reserviert(String lagerplatz, Long transportauftragId, String begruendung) {
+        return new WareneingangErgebnis(Ergebnis.PLATZ_RESERVIERT, lagerplatz, transportauftragId, null, begruendung);
     }
 
     static WareneingangErgebnis klaerplatz(Long klaerfallId) {
-        return new WareneingangErgebnis(Ergebnis.KLAERPLATZ, null, null, klaerfallId);
+        return new WareneingangErgebnis(Ergebnis.KLAERPLATZ, null, null, klaerfallId, null);
     }
 }

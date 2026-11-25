@@ -1,5 +1,6 @@
 package de.hilpert.lager.repository;
 
+import de.hilpert.lager.TestDaten;
 import de.hilpert.lager.PostgresTestKonfiguration;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.Bestand;
@@ -33,8 +34,8 @@ class DatenbankSchemaTest {
 
     @Test
     void negativerBestandWirdAbgelehnt() {
-        Lagerplatz platz = lagerplatzRepository.save(new Lagerplatz(1, 1, 1, 40));
-        Artikel artikel = artikelRepository.save(new Artikel("1001", "Wasser"));
+        Lagerplatz platz = lagerplatzRepository.save(TestDaten.platz(1, 1, 1, 40));
+        Artikel artikel = artikelRepository.save(TestDaten.artikel("1001"));
 
         assertThatThrownBy(() -> bestandRepository.saveAndFlush(new Bestand(artikel, platz, -1)))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -42,8 +43,8 @@ class DatenbankSchemaTest {
 
     @Test
     void zweiBestaendeAufEinemPlatzWerdenAbgelehnt() {
-        Lagerplatz platz = lagerplatzRepository.save(new Lagerplatz(1, 1, 1, 40));
-        Artikel artikel = artikelRepository.save(new Artikel("1001", "Wasser"));
+        Lagerplatz platz = lagerplatzRepository.save(TestDaten.platz(1, 1, 1, 40));
+        Artikel artikel = artikelRepository.save(TestDaten.artikel("1001"));
         bestandRepository.saveAndFlush(new Bestand(artikel, platz, 5));
 
         assertThatThrownBy(() -> bestandRepository.saveAndFlush(new Bestand(artikel, platz, 5)))

@@ -10,7 +10,7 @@ import jakarta.persistence.Version;
 
 /**
  * Menge eines Artikels auf einem Lagerplatz. Ein leerer Platz hat keinen Bestand-Datensatz:
- * Fällt die Menge auf 0, wird der Bestand gelöscht und der Platz ist wieder frei.
+ * Sind Menge und Reservierung 0, wird der Bestand gelöscht und der Platz ist wieder frei.
  */
 @Entity
 public class Bestand {
@@ -28,6 +28,9 @@ public class Bestand {
 
     private int menge;
 
+    /** Unterwegs zum Platz, noch nicht eingescannt: belegt Kapazität, ist aber nicht verfügbar. */
+    private int reserviert;
+
     /** Optimistisches Sperren: Zwei gleichzeitige Buchungen auf denselben Bestand fallen auf. */
     @Version
     private long version;
@@ -42,15 +45,36 @@ public class Bestand {
         this.menge = menge;
     }
 
-    public int freieKapazitaet() {
-        return lagerplatz.getKapazitaet() - menge;
+    /** Reserviert einen leeren Platz für Ware, die noch unterwegs ist. */
+    public static Bestand reservierung(Artikel artikel, Lagerplatz lagerplatz, int menge) {
+        Bestand bestand = new Bestand(artikel, lagerplatz, 0);
+        bestand.reservieren(menge);
+        return bestand;
     }
 
-    public void zubuchen(int zugang) {
+    public int freieKapazitaet() {
+        return Math.max(0, lagerplatz.fassungsvermoegen(artikel) - menge - reserviert);
+    }
+
+    public void reservieren(int zugang) {
         if (zugang > freieKapazitaet()) {
             throw new IllegalArgumentException("Platz " + lagerplatz.getCode() + " hat nicht genug freie Kapazität");
         }
+        reserviert += zugang;
+    }
+
+    /** Die Ware steht auf dem Platz und wurde gescannt: aus der Reservierung wird Bestand. */
+    public void einbuchen(int zugang) {
+        if (zugang > reserviert) {
+            throw new IllegalArgumentException("Auf Platz " + lagerplatz.getCode() + " sind nur "
+                    + reserviert + " Stück reserviert");
+        }
+        reserviert -= zugang;
         menge += zugang;
+    }
+
+    public boolean istLeer() {
+        return menge == 0 && reserviert == 0;
     }
 
     public void abbuchen(int abgang) {
@@ -70,6 +94,10 @@ public class Bestand {
 
     public Lagerplatz getLagerplatz() {
         return lagerplatz;
+    }
+
+    public int getReserviert() {
+        return reserviert;
     }
 
     public int getMenge() {

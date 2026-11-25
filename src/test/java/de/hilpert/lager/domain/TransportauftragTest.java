@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TransportauftragTest {
 
     private Transportauftrag neuerAuftrag() {
-        return new Transportauftrag(TransportArt.EINLAGERUNG, "1001", 10,
+        return new Transportauftrag(TransportArt.AUSLAGERUNG, "1001", 10,
                 Transportauftrag.WARENEINGANG, "01-01-1", Prioritaet.NORMAL, null);
     }
 
@@ -51,5 +51,17 @@ class TransportauftragTest {
 
         assertThatThrownBy(() -> auftrag.aenderePrioritaet(Prioritaet.NIEDRIG))
                 .isInstanceOf(UngueltigerStatusException.class);
+    }
+
+    @Test
+    void einlagerungKannNichtOhneScanAbgeschlossenWerden() {
+        Transportauftrag auftrag = new Transportauftrag(TransportArt.EINLAGERUNG, "1001", 10,
+                Transportauftrag.WARENEINGANG, "01-01-1", Prioritaet.NORMAL, null);
+        auftrag.starten();
+
+        assertThatThrownBy(auftrag::abschliessen).isInstanceOf(UngueltigerStatusException.class);
+        auftrag.eingelagert();
+        assertThat(auftrag.getStatus()).isEqualTo(TransportStatus.ERLEDIGT);
+        assertThatThrownBy(auftrag::eingelagert).isInstanceOf(UngueltigerStatusException.class);
     }
 }

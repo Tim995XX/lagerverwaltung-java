@@ -1,5 +1,6 @@
 package de.hilpert.lager.web;
 
+import de.hilpert.lager.domain.FalscherScanException;
 import de.hilpert.lager.domain.UngueltigerStatusException;
 import de.hilpert.lager.fehler.KonfliktException;
 import de.hilpert.lager.fehler.NichtGefundenException;
@@ -35,6 +36,11 @@ public class FehlerBehandlung {
     @ExceptionHandler({KonfliktException.class, UngueltigerStatusException.class})
     ProblemDetail konflikt(RuntimeException e) {
         return problem(HttpStatus.CONFLICT, "Konflikt", e.getMessage());
+    }
+
+    @ExceptionHandler(FalscherScanException.class)
+    ProblemDetail falscherScan(FalscherScanException e) {
+        return problem(HttpStatus.CONFLICT, "Falscher Scan", e.getMessage());
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)

@@ -3,6 +3,7 @@ package de.hilpert.lager.service;
 import de.hilpert.lager.domain.Bestand;
 import de.hilpert.lager.domain.Lagerplatz;
 import de.hilpert.lager.fehler.KonfliktException;
+import de.hilpert.lager.fehler.NichtGefundenException;
 import de.hilpert.lager.repository.BestandRepository;
 import de.hilpert.lager.repository.LagerplatzRepository;
 import org.springframework.stereotype.Service;
@@ -23,12 +24,27 @@ public class LagerplatzService {
     }
 
     @Transactional
-    public Lagerplatz anlegen(int gang, int regal, int ebene, int kapazitaet) {
+    public Lagerplatz anlegen(int gang, int regal, int ebene, int kapazitaet,
+                              int laengeMm, int breiteMm, int hoeheMm, int maxGewichtKg) {
         String code = Lagerplatz.codeFuer(gang, regal, ebene);
         if (lagerplatzRepository.existsByCode(code)) {
             throw new KonfliktException("Lagerplatz " + code + " existiert bereits");
         }
-        return lagerplatzRepository.save(new Lagerplatz(gang, regal, ebene, kapazitaet));
+        Lagerplatz platz = new Lagerplatz(gang, regal, ebene, kapazitaet);
+        platz.setzeMasse(laengeMm, breiteMm, hoeheMm, maxGewichtKg);
+        return lagerplatzRepository.save(platz);
+    }
+
+    /** Maße nachtragen, solange der Platz noch keine hat oder nicht belegt bzw. reserviert ist. */
+    @Transactional
+    public Lagerplatz setzeMasse(String code, int laengeMm, int breiteMm, int hoeheMm, int maxGewichtKg) {
+        Lagerplatz platz = lagerplatzRepository.findByCode(code)
+                .orElseThrow(() -> new NichtGefundenException("Lagerplatz " + code + " nicht gefunden"));
+        if (platz.hatMasse() && bestandRepository.findByLagerplatzCode(code).isPresent()) {
+            throw new KonfliktException("Lagerplatz " + code + " ist belegt, Maße sind gesperrt");
+        }
+        platz.setzeMasse(laengeMm, breiteMm, hoeheMm, maxGewichtKg);
+        return platz;
     }
 
     @Transactional(readOnly = true)

@@ -22,16 +22,18 @@ zu lernen.
 ## Fachlicher Ablauf
 
 ```
-Wareneingang ──▶ passender Platz?  ── ja ──▶ Bestand buchen + Transportauftrag EINLAGERUNG
+Wareneingang ──▶ passender Platz?  ── ja ──▶ Platz reservieren + Transportauftrag EINLAGERUNG
+                       │                                     │
+                       │                                     └──▶ Scan von Ware UND Platz ──▶ Bestand gebucht
                        │
-                       └── nein ──▶ Klärfall KEIN_PASSENDER_PLATZ
+                       └── nein ──▶ Klärfall KEIN_PASSENDER_PLATZ oder MASSE_FEHLEN
 
 Kommissionierauftrag ──▶ Bestand reicht für alle Positionen?
                        │
                        ├── ja ──▶ ausbuchen (kleinste Bestände zuerst) + Transportaufträge AUSLAGERUNG
                        └── nein ──▶ nichts buchen, Auftrag IN_KLAERUNG + Klärfall BESTAND_NICHT_AUSREICHEND
 
-Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss──▶ ERLEDIGT
+Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss (Auslagerung) / scan (Einlagerung)──▶ ERLEDIGT
                    Reihenfolge: Priorität (HOCH, NORMAL, NIEDRIG), dann ältester zuerst
 ```
 
@@ -39,9 +41,14 @@ Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss──▶
 
 - **Stammdaten:** Artikel (eindeutige Artikelnummer) und Lagerplätze mit Adresse
   Gang-Regal-Ebene (z. B. `01-03-2`) und Kapazität in Stück.
-- **Wareneingang:** sucht zuerst einen Platz, auf dem der Artikel schon liegt und noch genug
-  frei ist (Zulagerung), sonst den **kleinsten leeren Platz, auf den die Menge passt**
-  (Best Fit, damit große Plätze für große Mengen frei bleiben).
+- **Platzsuche im Wareneingang:** zuerst ein Platz, auf dem der Artikel schon liegt und noch genug
+  frei ist (Zulagerung), sonst der sinnvollste leere Platz. Muss-Regeln: Maße (Ware aufrecht,
+  90° drehbar, stapelbar) und Traglast. Danach: schwere Ware (ab 15 kg) nach unten, Schnelldreher
+  nah an die Tore, sonst der knappste passende Platz, Langsamdreher eher hinten. Plätze mit noch
+  offener Auslagerung werden ausgelassen. Die Antwort nennt die Begründung.
+- **Scan-Bestätigung:** Der Platz wird nur reserviert. Erst wenn Ware und Platz gescannt sind und
+  zum Auftrag passen, entsteht Bestand. Ein falscher Scan ergibt `409`, bucht nichts und wird
+  protokolliert. Ohne Scan lässt sich eine Einlagerung nicht abschließen.
 - **Kommissionierung:** mehrere Positionen pro Auftrag, Mengen desselben Artikels werden
   zusammengezählt. Gebucht wird nur, wenn **alle** Positionen bedient werden können.
   Ausgelagert wird von den kleinsten Beständen zuerst, damit angebrochene Plätze leer werden.
@@ -90,9 +97,15 @@ zusammenpassen (`ddl-auto=validate`).
 - **Unique-Regel auf dem Lagerplatz:** Belegen zwei Anfragen gleichzeitig denselben leeren Platz,
   hilft `@Version` nicht, weil es noch keinen Datensatz gibt. Das fängt die Datenbank ab, die zweite
   Anfrage bekommt `409`. Andere Datenbankverstöße bleiben ein `500`, weil sie Programmfehler sind.
+- **Reservierung und Bestand getrennt:** Reservierte Ware belegt Kapazität, kann aber nicht
+  kommissioniert werden, solange sie nicht gescannt ist.
+- **Falscher Scan ohne Rollback:** `noRollbackFor` sorgt dafür, dass der Protokolleintrag trotz
+  Exception erhalten bleibt.
+- **Platzsuche in Java statt SQL:** gut testbar. Bei sehr vielen Plätzen müsste mehr in die Datenbank.
+- **Grenze des Scans:** Er belegt, welche Codes gescannt wurden, nicht wo die Ware wirklich steht.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
-  mehrere Plätze verteilt; der Bestand wird sofort gebucht und nicht erst, wenn der
-  Transport quittiert ist; keine Chargen, kein MHD, keine Benutzer.
+  mehrere Plätze verteilt; Auslagerungen werden sofort abgebucht und ohne Scan
+  abgeschlossen; die Entfernung ist Gang + Regal; keine Chargen, kein MHD, keine Benutzer.
 
 ## Starten
 
@@ -130,13 +143,19 @@ curl -s localhost:8080/api/bestaende
 curl -s -X POST localhost:8080/api/wareneingaenge \
   -H 'Content-Type: application/json' \
   -d '{"artikelNummer": "1002", "menge": 20}'
-# → {"ergebnis":"EINGELAGERT","lagerplatz":"01-02-1","transportauftragId":4,"klaerfallId":null}
+# → {"ergebnis":"PLATZ_RESERVIERT","lagerplatz":"01-01-2","transportauftragId":4,"klaerfallId":null,
+#    "begruendung":"kleinster passender Platz, dann kurzer Weg"}
+
+# Fahren, abstellen, scannen: erst jetzt wird gebucht
+curl -s -X POST localhost:8080/api/transportauftraege/4/start
+curl -s -X POST localhost:8080/api/transportauftraege/4/scan \
+  -H 'Content-Type: application/json' -d '{"artikelNummer": "1002", "lagerplatzCode": "01-01-2"}'
 
 # Zu groß für jeden Platz → Klärplatz
 curl -s -X POST localhost:8080/api/wareneingaenge \
   -H 'Content-Type: application/json' \
   -d '{"artikelNummer": "1001", "menge": 999}'
-# → {"ergebnis":"KLAERPLATZ","lagerplatz":null,"transportauftragId":null,"klaerfallId":1}
+# → {"ergebnis":"KLAERPLATZ","lagerplatz":null,"transportauftragId":null,"klaerfallId":1,"begruendung":null}
 
 # Kommissionierauftrag mit hoher Priorität
 curl -s -X POST localhost:8080/api/kommissionierauftraege \
@@ -146,11 +165,11 @@ curl -s -X POST localhost:8080/api/kommissionierauftraege \
 # Offene Transportaufträge in Abarbeitungsreihenfolge
 curl -s 'localhost:8080/api/transportauftraege?status=OFFEN'
 
-# Transport starten, abschließen, umpriorisieren
-curl -s -X POST localhost:8080/api/transportauftraege/1/start
-curl -s -X POST localhost:8080/api/transportauftraege/1/abschluss
-curl -s -X PUT  localhost:8080/api/transportauftraege/2/prioritaet \
+# Auslagerung umpriorisieren, starten, abschließen
+curl -s -X PUT  localhost:8080/api/transportauftraege/5/prioritaet \
   -H 'Content-Type: application/json' -d '{"prioritaet": "HOCH"}'
+curl -s -X POST localhost:8080/api/transportauftraege/5/start
+curl -s -X POST localhost:8080/api/transportauftraege/5/abschluss
 
 # Klärplatz ansehen und einen Fall abschließen
 curl -s localhost:8080/api/klaerfaelle
@@ -173,6 +192,8 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 | `/api/kommissionierauftraege`, `/{id}` | POST, GET | Kommissionierung |
 | `/api/transportauftraege` | GET (`?status=`) | Liste in Abarbeitungsreihenfolge |
 | `/api/transportauftraege/{id}/start` \| `/abschluss` | POST | Statuswechsel |
+| `/api/transportauftraege/{id}/scan`, `/scans` | POST, GET | Einlagerung per Scan bestätigen, Protokoll |
+| `/api/artikel/{nr}/masse`, `/api/lagerplaetze/{code}/masse` | PUT | Maße nachtragen |
 | `/api/transportauftraege/{id}/prioritaet` | PUT | Umpriorisieren |
 | `/api/klaerfaelle`, `/{id}/erledigen` | GET (`?erledigt=`), POST | Klärplatz |
 
@@ -185,7 +206,7 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
 räumt es danach wieder weg.
 
-28 Tests, alle grün:
+42 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
@@ -193,6 +214,8 @@ räumt es danach wieder weg.
 - **Repository-Test** (`@DataJpaTest`): die eigene JPQL-Abfrage für leere Plätze gegen PostgreSQL.
 - **Schema-Test:** Flyway-Migration ist gelaufen; negativer Bestand und doppelt belegte Plätze
   werden von der Datenbank abgelehnt.
+- **Platzsuche und Scan:** Drehen, Stapeln, Traglast, Reihenfolge; falscher und doppelter Scan.
+- **Migrationstest:** V2 läuft auch auf einer Datenbank mit V1-Daten.
 - **Test gleichzeitiger Buchungen:** Zwei Wareneingänge wollen denselben leeren Platz; die zweite
   Anfrage bekommt `409`, bucht nichts und gelingt beim nächsten Versuch.
 - **Integrationstests** (`@SpringBootTest` + MockMvc): kompletter Ablauf von Wareneingang
@@ -212,7 +235,8 @@ räumt es danach wieder weg.
 
 ## Mögliche Erweiterungen
 
-- Bestand erst bei Quittierung des Einlagerungs-Transports buchen (mit Platzreservierung)
+- Einlagerung abbrechen oder auf einen anderen Platz umleiten, wenn der Platz nicht nutzbar ist
+- Auslagerungen ebenfalls per Scan bestätigen
 - Anlieferungen auf mehrere Plätze verteilen
 - Klärfall „erneut versuchen“, z. B. Kommissionierauftrag nach Nachschub neu prüfen
 - Lagerplätze sperren (z. B. Regal beschädigt) und bei der Platzsuche auslassen

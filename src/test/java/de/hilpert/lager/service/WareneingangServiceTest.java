@@ -1,5 +1,6 @@
 package de.hilpert.lager.service;
 
+import de.hilpert.lager.TestDaten;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.Bestand;
 import de.hilpert.lager.domain.KlaerGrund;
@@ -17,9 +18,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,9 +41,11 @@ class WareneingangServiceTest {
     @Mock TransportauftragRepository transportauftragRepository;
     @Mock KlaerfallRepository klaerfallRepository;
 
+    @Spy PlatzSuche platzSuche = new PlatzSuche();
+
     @InjectMocks WareneingangService service;
 
-    private final Artikel wasser = new Artikel("1001", "Wasser");
+    private final Artikel wasser = TestDaten.artikel("1001");
 
     @BeforeEach
     void setUp() {
@@ -53,21 +58,22 @@ class WareneingangServiceTest {
 
     @Test
     void lagertAufVorhandenenPlatzZuWennNochPlatzIst() {
-        Bestand vorhanden = new Bestand(wasser, new Lagerplatz(1, 1, 1, 50), 30);
+        Bestand vorhanden = new Bestand(wasser, TestDaten.platz(1, 1, 1, 50), 30);
         when(bestandRepository.findByArtikelOrderByMengeAsc(wasser)).thenReturn(List.of(vorhanden));
 
         WareneingangErgebnis ergebnis = service.einlagern("1001", 20);
 
-        assertThat(ergebnis.ergebnis()).isEqualTo(WareneingangErgebnis.Ergebnis.EINGELAGERT);
+        assertThat(ergebnis.ergebnis()).isEqualTo(WareneingangErgebnis.Ergebnis.PLATZ_RESERVIERT);
         assertThat(ergebnis.lagerplatz()).isEqualTo("01-01-1");
-        assertThat(vorhanden.getMenge()).isEqualTo(50);
+        assertThat(vorhanden.getMenge()).isEqualTo(30);
+        assertThat(vorhanden.getReserviert()).isEqualTo(20);
         verify(lagerplatzRepository, never()).findeLeerePlaetzeFuer(any(Integer.class));
     }
 
     @Test
     void nimmtLeerenPlatzWennZulagerungNichtPasst() {
-        Bestand fastVoll = new Bestand(wasser, new Lagerplatz(1, 1, 1, 50), 45);
-        Lagerplatz leer = new Lagerplatz(2, 1, 1, 120);
+        Bestand fastVoll = new Bestand(wasser, TestDaten.platz(1, 1, 1, 50), 45);
+        Lagerplatz leer = TestDaten.platz(2, 1, 1, 120);
         when(bestandRepository.findByArtikelOrderByMengeAsc(wasser)).thenReturn(List.of(fastVoll));
         when(lagerplatzRepository.findeLeerePlaetzeFuer(20)).thenReturn(List.of(leer));
 
@@ -97,5 +103,27 @@ class WareneingangServiceTest {
         assertThat(klaerfall.getValue().getMenge()).isEqualTo(500);
         verify(bestandRepository, never()).save(any());
         verify(transportauftragRepository, never()).save(any());
+    }
+
+    @Test
+    void fehlendeMasseWerdenGeklaert() {
+        when(artikelService.finde("1001")).thenReturn(new Artikel("1001", "ohne Maße"));
+
+        service.einlagern("1001", 5);
+
+        ArgumentCaptor<Klaerfall> klaerfall = ArgumentCaptor.forClass(Klaerfall.class);
+        verify(klaerfallRepository).save(klaerfall.capture());
+        assertThat(klaerfall.getValue().getGrund()).isEqualTo(KlaerGrund.MASSE_FEHLEN);
+    }
+
+    @Test
+    void plaetzeMitOffenerAuslagerungWerdenAusgelassen() {
+        when(transportauftragRepository.plaetzeMitOffenerAuslagerung()).thenReturn(Set.of("01-01-1", "01-01-2"));
+        when(bestandRepository.findByArtikelOrderByMengeAsc(wasser))
+                .thenReturn(List.of(new Bestand(wasser, TestDaten.platz(1, 1, 1, 50), 10)));
+        when(lagerplatzRepository.findeLeerePlaetzeFuer(5))
+                .thenReturn(List.of(TestDaten.platz(1, 1, 2, 50), TestDaten.platz(2, 1, 1, 50)));
+
+        assertThat(service.einlagern("1001", 5).lagerplatz()).isEqualTo("02-01-1");
     }
 }

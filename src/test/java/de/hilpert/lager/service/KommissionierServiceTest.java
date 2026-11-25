@@ -1,5 +1,6 @@
 package de.hilpert.lager.service;
 
+import de.hilpert.lager.TestDaten;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.AuftragStatus;
 import de.hilpert.lager.domain.Auftragsposition;
@@ -43,7 +44,7 @@ class KommissionierServiceTest {
 
     @InjectMocks KommissionierService service;
 
-    private final Artikel wasser = new Artikel("1001", "Wasser");
+    private final Artikel wasser = TestDaten.artikel("1001");
     private Bestand kleinerBestand;
     private Bestand grosserBestand;
 
@@ -51,8 +52,8 @@ class KommissionierServiceTest {
     void setUp() {
         when(auftragRepository.save(any())).thenAnswer(aufruf -> aufruf.getArgument(0));
         when(artikelService.finde("1001")).thenReturn(wasser);
-        kleinerBestand = new Bestand(wasser, new Lagerplatz(1, 1, 1, 40), 10);
-        grosserBestand = new Bestand(wasser, new Lagerplatz(2, 1, 1, 120), 80);
+        kleinerBestand = new Bestand(wasser, TestDaten.platz(1, 1, 1, 40), 10);
+        grosserBestand = new Bestand(wasser, TestDaten.platz(2, 1, 1, 120), 80);
         // Repository liefert bereits nach Menge aufsteigend sortiert
         when(bestandRepository.findByArtikelOrderByMengeAsc(wasser)).thenReturn(List.of(kleinerBestand, grosserBestand));
     }
@@ -104,5 +105,18 @@ class KommissionierServiceTest {
         Kommissionierauftrag auftrag = service.anlegen(positionen, Prioritaet.NORMAL);
 
         assertThat(auftrag.getStatus()).isEqualTo(AuftragStatus.IN_KLAERUNG);
+    }
+
+    @Test
+    void reservierteWareIstNochNichtVerfuegbar() {
+        Bestand unterwegs = Bestand.reservierung(wasser, TestDaten.platz(3, 1, 1, 50), 50);
+        when(bestandRepository.findByArtikelOrderByMengeAsc(wasser)).thenReturn(List.of(unterwegs, kleinerBestand));
+
+        assertThat(service.anlegen(List.of(new Auftragsposition("1001", 11)), Prioritaet.NORMAL).getStatus())
+                .isEqualTo(AuftragStatus.IN_KLAERUNG);
+        assertThat(service.anlegen(List.of(new Auftragsposition("1001", 10)), Prioritaet.NORMAL).getStatus())
+                .isEqualTo(AuftragStatus.FREIGEGEBEN);
+        verify(transportauftragRepository, times(1)).save(any());
+        verify(bestandRepository, never()).delete(unterwegs);
     }
 }

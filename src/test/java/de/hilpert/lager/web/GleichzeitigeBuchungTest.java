@@ -1,5 +1,6 @@
 package de.hilpert.lager.web;
 
+import de.hilpert.lager.TestDaten;
 import de.hilpert.lager.PostgresTestKonfiguration;
 import de.hilpert.lager.domain.Artikel;
 import de.hilpert.lager.domain.Bestand;
@@ -50,14 +51,14 @@ class GleichzeitigeBuchungTest {
     @BeforeEach
     @AfterEach
     void leereDatenbank() {
-        jdbc.execute("truncate transportauftrag, klaerfall, kommissionierauftrag_positionen, "
+        jdbc.execute("truncate scan, transportauftrag, klaerfall, kommissionierauftrag_positionen, "
                 + "kommissionierauftrag, bestand, lagerplatz, artikel");
     }
 
     @Test
     void zweiteBuchungAufDenselbenPlatzBekommt409UndBuchtNichts() throws Exception {
-        Artikel artikel = artikelRepository.save(new Artikel("1001", "Mineralwasser"));
-        Lagerplatz platz = lagerplatzRepository.save(new Lagerplatz(1, 1, 1, 40));
+        Artikel artikel = artikelRepository.save(TestDaten.artikel("1001"));
+        Lagerplatz platz = lagerplatzRepository.save(TestDaten.platz(1, 1, 1, 40));
 
         CompletableFuture<MvcResult> zweite = new TransactionTemplate(transaktionen).execute(status -> {
             bestandRepository.saveAndFlush(new Bestand(artikel, platz, 10));
@@ -76,7 +77,10 @@ class GleichzeitigeBuchungTest {
         // Ein neuer Versuch gelingt: Der Platz hat noch Kapazität, die Ware wird zugelagert
         assertThat(wareneingang().getResponse().getStatus()).isEqualTo(200);
         assertThat(bestandRepository.findAll()).singleElement()
-                .satisfies(b -> assertThat(b.getMenge()).isEqualTo(15));
+                .satisfies(b -> {
+                    assertThat(b.getMenge()).isEqualTo(10);
+                    assertThat(b.getReserviert()).isEqualTo(5);
+                });
     }
 
     private MvcResult wareneingang() {

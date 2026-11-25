@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.Version;
 
 import java.time.LocalDateTime;
 
@@ -53,6 +54,13 @@ public class Transportauftrag {
     @Column(nullable = false)
     private LocalDateTime erstelltAm;
 
+    /** Bei Einlagerungen erst nach dem Scan am Platz wahr. */
+    private boolean bestandGebucht;
+
+    /** Zwei gleichzeitige Scans desselben Auftrags fallen auf. */
+    @Version
+    private long version;
+
     protected Transportauftrag() {
         // für JPA
     }
@@ -66,6 +74,7 @@ public class Transportauftrag {
         this.nachOrt = nachOrt;
         this.prioritaet = prioritaet;
         this.kommissionierauftragId = kommissionierauftragId;
+        this.bestandGebucht = art != TransportArt.EINLAGERUNG;
         this.status = TransportStatus.OFFEN;
         this.erstelltAm = LocalDateTime.now();
     }
@@ -74,8 +83,36 @@ public class Transportauftrag {
         wechsleStatus(TransportStatus.OFFEN, TransportStatus.IN_ARBEIT);
     }
 
+    /** Einlagerungen werden nicht von Hand abgeschlossen, sondern durch den Scan am Platz. */
     public void abschliessen() {
+        if (art == TransportArt.EINLAGERUNG) {
+            throw new UngueltigerStatusException("Einlagerungen werden durch den Scan am Lagerplatz abgeschlossen");
+        }
         wechsleStatus(TransportStatus.IN_ARBEIT, TransportStatus.ERLEDIGT);
+    }
+
+    public void pruefeBereitZumScan() {
+        if (art != TransportArt.EINLAGERUNG) {
+            throw new UngueltigerStatusException("Transportauftrag " + id + " ist keine Einlagerung");
+        }
+        if (status != TransportStatus.IN_ARBEIT) {
+            throw new UngueltigerStatusException(
+                    "Transportauftrag " + id + " ist " + status + ", erwartet war " + TransportStatus.IN_ARBEIT);
+        }
+    }
+
+    public boolean passtZuScan(String artikel, String platz) {
+        return artikelNummer.equals(artikel) && nachOrt.equals(platz);
+    }
+
+    public void eingelagert() {
+        pruefeBereitZumScan();
+        bestandGebucht = true;
+        status = TransportStatus.ERLEDIGT;
+    }
+
+    public boolean isBestandGebucht() {
+        return bestandGebucht;
     }
 
     /** Der Leitstand darf nur Aufträge umpriorisieren, die noch nicht erledigt sind. */
