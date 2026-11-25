@@ -87,6 +87,9 @@ zusammenpassen (`ddl-auto=validate`).
   Git nachvollziehbar und überall in derselben Reihenfolge ausgeführt.
 - **Regeln auch in der Datenbank:** Check-, Unique- und Fremdschlüssel-Constraints lehnen z. B.
   negativen Bestand selbst dann ab, wenn der Java-Code einen Fehler hat.
+- **Unique-Regel auf dem Lagerplatz:** Belegen zwei Anfragen gleichzeitig denselben leeren Platz,
+  hilft `@Version` nicht, weil es noch keinen Datensatz gibt. Das fängt die Datenbank ab, die zweite
+  Anfrage bekommt `409`. Andere Datenbankverstöße bleiben ein `500`, weil sie Programmfehler sind.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
   mehrere Plätze verteilt; der Bestand wird sofort gebucht und nicht erst, wenn der
   Transport quittiert ist; keine Chargen, kein MHD, keine Benutzer.
@@ -182,7 +185,7 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
 räumt es danach wieder weg.
 
-25 Tests, alle grün:
+28 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
@@ -190,6 +193,8 @@ räumt es danach wieder weg.
 - **Repository-Test** (`@DataJpaTest`): die eigene JPQL-Abfrage für leere Plätze gegen PostgreSQL.
 - **Schema-Test:** Flyway-Migration ist gelaufen; negativer Bestand und doppelt belegte Plätze
   werden von der Datenbank abgelehnt.
+- **Test gleichzeitiger Buchungen:** Zwei Wareneingänge wollen denselben leeren Platz; die zweite
+  Anfrage bekommt `409`, bucht nichts und gelingt beim nächsten Versuch.
 - **Integrationstests** (`@SpringBootTest` + MockMvc): kompletter Ablauf von Wareneingang
   über Kommissionierung bis zum Transport, Klärplatz, und die HTTP-Codes bei
   ungültigen Eingaben (400), unbekannten Artikeln (404) und Konflikten (409).

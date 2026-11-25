@@ -3,6 +3,7 @@ package de.hilpert.lager.web;
 import de.hilpert.lager.domain.UngueltigerStatusException;
 import de.hilpert.lager.fehler.KonfliktException;
 import de.hilpert.lager.fehler.NichtGefundenException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -21,6 +23,9 @@ import java.util.TreeMap;
  */
 @RestControllerAdvice
 public class FehlerBehandlung {
+
+    /** SQLSTATE für eine verletzte Unique-Regel (unique_violation). */
+    private static final String UNIQUE_VERLETZT = "23505";
 
     @ExceptionHandler(NichtGefundenException.class)
     ProblemDetail nichtGefunden(NichtGefundenException e) {
@@ -36,6 +41,20 @@ public class FehlerBehandlung {
     ProblemDetail gleichzeitigeAenderung(ObjectOptimisticLockingFailureException e) {
         return problem(HttpStatus.CONFLICT, "Konflikt",
                 "Der Datensatz wurde gleichzeitig geändert, bitte erneut versuchen");
+    }
+
+    /**
+     * Doppelter Wert, z. B. weil zwei Wareneingänge gleichzeitig denselben leeren Platz belegen.
+     * Andere Verstöße (z. B. negative Menge) sind Programmfehler und bleiben ein 500.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ProblemDetail doppelterWert(DataIntegrityViolationException e) {
+        if (e.getMostSpecificCause() instanceof SQLException sql
+                && UNIQUE_VERLETZT.equals(sql.getSQLState())) {
+            return problem(HttpStatus.CONFLICT, "Konflikt",
+                    "Der Wert wurde gleichzeitig vergeben, bitte erneut versuchen");
+        }
+        throw e;
     }
 
     /** Bean Validation (@Valid) fehlgeschlagen: alle Feldfehler gesammelt zurückgeben. */
