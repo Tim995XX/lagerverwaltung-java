@@ -1,0 +1,525 @@
+/*
+ * Farben mit Kontrast von mindestens 4.5:1 zum Hintergrund (WCAG 2.2 AA), Rahmen und Fokus mindestens 3:1.
+ * Werte stehen als Variablen an einer Stelle; der Dunkelmodus tauscht nur die Variablen.
+ */
+:root {
+  --hintergrund: #ffffff;
+  --flaeche: #f3f5f8;
+  --text: #1b1f24;
+  --text-leise: #4a5360;
+  --rahmen: #6b7480;
+  --linie: #d5dae1;
+  --primaer: #0b5cad;
+  --primaer-text: #ffffff;
+  --primaer-hover: #084a8c;
+  --fokus: #0b5cad;
+  --erfolg-text: #1d5e2f;
+  --erfolg-flaeche: #e6f4ea;
+  --hinweis-text: #5c4300;
+  --hinweis-flaeche: #fff4d6;
+  --fehler-text: #a1231a;
+  --fehler-flaeche: #fdecea;
+  --dringend: #a1231a;
+
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  font-size: 100%; /* Browser-Schriftgröße des Nutzers respektieren */
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--hintergrund);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hintergrund: #14171b;
+    --flaeche: #1f242a;
+    --text: #e8eaed;
+    --text-leise: #b3bac4;
+    --rahmen: #8f98a3;
+    --linie: #3a414a;
+    --primaer: #8ab4f8;
+    --primaer-text: #0c1a2e;
+    --primaer-hover: #aecbfa;
+    --fokus: #8ab4f8;
+    --erfolg-text: #a8dab5;
+    --erfolg-flaeche: #1d3324;
+    --hinweis-text: #f6d77d;
+    --hinweis-flaeche: #3a3015;
+    --fehler-text: #f6aea9;
+    --fehler-flaeche: #3d1f1d;
+    --dringend: #f6aea9;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1, h2, h3 {
+  line-height: 1.25;
+  margin: 1.5rem 0 0.75rem;
+}
+h1 { font-size: 1.75rem; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.1rem; margin-top: 0; }
+
+a {
+  color: var(--primaer);
+  text-underline-offset: 0.15em;
+}
+
+code {
+  font-size: 0.95em;
+  background: var(--flaeche);
+  padding: 0 0.25em;
+  border-radius: 3px;
+}
+
+/* Fokus immer deutlich sichtbar, auch auf Überschriften, die per Programm den Fokus bekommen */
+:focus-visible {
+  outline: 3px solid var(--fokus);
+  outline-offset: 2px;
+}
+[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---------- Kopf und Navigation ---------- */
+
+.springlink {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  padding: 0.75rem 1rem;
+  background: var(--primaer);
+  color: var(--primaer-text);
+  z-index: 10;
+}
+.springlink:focus {
+  top: 0.5rem;
+}
+
+.kopf {
+  background: var(--flaeche);
+  border-bottom: 1px solid var(--linie);
+}
+.kopf-zeile,
+.kopf nav ul,
+main {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding-inline: 1rem;
+}
+.kopf-zeile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding-block: 0.75rem;
+}
+.logo {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.benutzer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.benutzer p {
+  margin: 0;
+}
+.kopf nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  list-style: none;
+  padding-block: 0 0.5rem;
+}
+.kopf nav a {
+  display: inline-block;
+  padding: 0.6rem 0.9rem;
+  min-height: 44px;
+  text-decoration: none;
+  color: var(--text);
+  border-radius: 4px;
+  border-bottom: 3px solid transparent;
+}
+.kopf nav a:hover {
+  background: var(--hintergrund);
+}
+/* Aktive Seite: fett und unterstrichen, nicht nur farbig */
+.kopf nav a[aria-current="page"] {
+  font-weight: 700;
+  border-bottom-color: var(--primaer);
+}
+
+main {
+  padding-bottom: 3rem;
+}
+main:focus {
+  outline: none;
+}
+
+.einleitung {
+  color: var(--text-leise);
+  max-width: 60ch;
+}
+
+/* ---------- Knöpfe ---------- */
+
+button {
+  font: inherit;
+  min-height: 44px; /* gut treffbar auch mit Handschuhen am Staplerterminal */
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 2px solid var(--primaer);
+  background: var(--primaer);
+  color: var(--primaer-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover {
+  background: var(--primaer-hover);
+  border-color: var(--primaer-hover);
+}
+.knopf-zweitrangig {
+  background: transparent;
+  color: var(--primaer);
+}
+.knopf-zweitrangig:hover {
+  background: var(--flaeche);
+  color: var(--primaer);
+}
+.knopf-klein {
+  min-height: 36px;
+  padding: 0.25rem 0.75rem;
+}
+.knopf-schlicht {
+  min-height: 32px;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  color: inherit;
+  border-color: currentColor;
+  font-weight: 400;
+}
+.knopf-schlicht:hover {
+  background: transparent;
+  text-decoration: underline;
+  border-color: currentColor;
+}
+
+/* ---------- Formulare ---------- */
+
+.formular {
+  display: grid;
+  gap: 1rem;
+  max-width: 48rem;
+  justify-items: start;
+}
+.formular.schmal {
+  max-width: 24rem;
+}
+.formular + .feld-hinweis {
+  margin-top: 1.5rem;
+}
+.formular > .feld,
+.formular > fieldset,
+.formular .feld-gruppe {
+  width: 100%;
+}
+.feld {
+  display: grid;
+  gap: 0.25rem;
+}
+.feld label {
+  font-weight: 600;
+}
+.pflicht {
+  font-weight: 400;
+  color: var(--text-leise);
+}
+input,
+select {
+  font: inherit;
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  border: 2px solid var(--rahmen);
+  border-radius: 4px;
+  background: var(--hintergrund);
+  color: var(--text);
+  max-width: 100%;
+}
+input[aria-invalid="true"],
+select[aria-invalid="true"] {
+  border-color: var(--fehler-text);
+  border-width: 3px;
+}
+.feld-hinweis {
+  margin: 0;
+  color: var(--text-leise);
+  font-size: 0.95rem;
+}
+.feld-fehler {
+  margin: 0;
+  color: var(--fehler-text);
+  font-weight: 600;
+}
+.feld-fehler::before {
+  content: "⚠ ";
+}
+.feld-ankreuz {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.feld-ankreuz input {
+  width: 1.5rem;
+  height: 1.5rem;
+  min-height: 0;
+}
+.feld-gruppe {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+}
+fieldset {
+  border: 1px solid var(--linie);
+  border-radius: 6px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+fieldset > .feld {
+  width: 100%;
+  max-width: 24rem;
+}
+legend {
+  font-weight: 700;
+  padding: 0 0.25rem;
+}
+
+.fehler-uebersicht {
+  width: 100%;
+  border: 3px solid var(--fehler-text);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: var(--fehler-flaeche);
+}
+.fehler-uebersicht h2 {
+  margin-top: 0;
+  color: var(--fehler-text);
+  font-size: 1.15rem;
+}
+.fehler-uebersicht a {
+  color: var(--fehler-text);
+  font-weight: 600;
+}
+
+/* ---------- Meldungen ---------- */
+
+.meldung {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  border-left: 6px solid;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+}
+.meldung p {
+  margin: 0;
+}
+.meldung-art {
+  font-weight: 700;
+}
+.meldung-erfolg { background: var(--erfolg-flaeche); color: var(--erfolg-text); }
+.meldung-hinweis { background: var(--hinweis-flaeche); color: var(--hinweis-text); }
+.meldung-fehler { background: var(--fehler-flaeche); color: var(--fehler-text); }
+.hinweis-kasten {
+  background: var(--hinweis-flaeche);
+  color: var(--hinweis-text);
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+}
+.lade-hinweis:empty {
+  display: none;
+}
+
+/* ---------- Werkzeugleiste, Karten, Ergebnis ---------- */
+
+.werkzeugleiste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.karten {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+.karte {
+  border: 1px solid var(--linie);
+  border-left: 6px solid var(--rahmen);
+  border-radius: 6px;
+  padding: 1rem;
+  background: var(--hintergrund);
+}
+.karte-dringend {
+  border-left-color: var(--dringend);
+}
+.eigenschaften {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+.eigenschaften dt {
+  font-size: 0.9rem;
+  color: var(--text-leise);
+}
+.eigenschaften dd {
+  margin: 0;
+  font-weight: 600;
+}
+.ziel {
+  font-size: 1.25rem;
+}
+.karten-aktionen {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+.unterformular {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  width: 100%;
+}
+.unterformular > .feld {
+  width: 100%;
+  max-width: 24rem;
+}
+.unterformular.inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+}
+.aufklapper {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+}
+.ergebnis {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--linie);
+  border-radius: 6px;
+}
+.ergebnis h2 {
+  margin-top: 0;
+}
+
+/* Status und Priorität: Text + Rahmen, Farbe nur zusätzlich */
+.marke {
+  display: inline-block;
+  padding: 0 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.marke-prio-hoch,
+.marke-gesperrt {
+  color: var(--dringend);
+}
+.marke-status-in_arbeit {
+  color: var(--primaer);
+}
+.marke-status-erledigt {
+  color: var(--erfolg-text);
+}
+.marke-status-abgebrochen {
+  color: var(--fehler-text);
+}
+
+/* ---------- Tabellen ---------- */
+
+.tabellen-rahmen {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+caption {
+  text-align: left;
+  font-weight: 700;
+  font-size: 1.15rem;
+  padding-bottom: 0.5rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--linie);
+  vertical-align: top;
+}
+thead th {
+  border-bottom: 2px solid var(--rahmen);
+  white-space: nowrap;
+}
+tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.zahl {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Nur für Screenreader sichtbar */
+.sichtbar-nur-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Windows-Kontrastmodus: Systemfarben statt eigener Farben, Rahmen bleiben sichtbar */
+@media (forced-colors: active) {
+  .marke,
+  .meldung,
+  .karte {
+    border-color: CanvasText;
+  }
+}

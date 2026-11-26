@@ -2,10 +2,16 @@
 
 [![CI](https://github.com/Tim995XX/lagerverwaltung-java/actions/workflows/ci.yml/badge.svg)](https://github.com/Tim995XX/lagerverwaltung-java/actions/workflows/ci.yml)
 
-Eine kleine Lagerverwaltung als REST-API mit **Java 21** und **Spring Boot**: Artikel und
+Eine kleine Lagerverwaltung als REST-API mit **Java 21** und **Spring Boot** und einer
+barrierearmen Oberfläche mit **React** und **TypeScript**: Artikel und
 Lagerplätze anlegen, Ware einlagern, Kommissionieraufträge auslagern, Transportaufträge nach
 Priorität abarbeiten – und alles, was das System nicht automatisch buchen kann, landet auf dem
 **Klärplatz**, wo ein Mensch es klärt.
+
+| Leitstand | Staplerfahrer (schmal, Dunkelmodus) |
+|---|---|
+| ![Transportaufträge im Leitstand mit Priorität](docs/bilder/transporte-leitstand.png) | ![Falscher Scan beim Fahrer, Fehlermeldung oben](docs/bilder/fahrer-scan-mobil-dunkel.png) |
+| ![Lagerplätze mit Bestand und Sperren-Knopf](docs/bilder/lager.png) | ![Fehlerübersicht mit Link zum Feld Menge](docs/bilder/feldfehler.png) |
 
 ## Motivation
 
@@ -62,6 +68,10 @@ Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss (Auslage
 - **Anmeldung und Rollen** (Spring Security): Der **Leitstand** darf alles, der **Staplerfahrer**
   darf lesen und Transportaufträge abarbeiten (starten, scannen, abschließen, umleiten), aber
   keine Stammdaten, Prioritäten oder Klärfälle ändern. Ohne Anmeldung `401`, ohne Recht `403`.
+- **Oberfläche** (React + TypeScript): Der Fahrer sieht seine Aufträge in Abarbeitungsreihenfolge,
+  startet sie und bestätigt per Scan. Der Leitstand hat zusätzlich Wareneingang, Kommissionierung,
+  Klärplatz, Platzsperren und Artikel. Die Oberfläche funktioniert per Tastatur und mit Screenreader,
+  auf schmalen Geräten und im Dunkelmodus (Details unter „Barrierefreiheit“).
 - **Fehlerbehandlung:** zentral per `@RestControllerAdvice`, Antworten im Format
   „Problem Details“ (RFC 9457) mit passenden HTTP-Codes (400, 401, 403, 404, 409).
 - **Bean Validation** auf allen Eingaben, **OpenAPI/Swagger-UI**, Health-Endpunkt.
@@ -81,6 +91,19 @@ Klassische Schichten: Controller → Service → Repository → Datenbank.
 | `domain` | JPA-Entities und Enums; Regeln, die nur ein Objekt betreffen (z. B. Statuswechsel), stehen direkt in der Entity |
 | `sicherheit` | Rechte je Rolle (`SicherheitsKonfiguration`), Benutzer aus der Datenbank, Demobenutzer |
 | `fehler` | Fachliche Exceptions (`NichtGefundenException`, `KonfliktException`) |
+
+Die Oberfläche liegt in `frontend/` (Vite, React, TypeScript, React Router):
+
+| Ordner | Aufgabe |
+|---|---|
+| `src/api` | `client.ts` (fetch mit Anmeldung, Problem Details → `ApiFehler`), Typen passend zu `web.dto`, `useDaten` zum Laden |
+| `src/anmeldung` | Anmeldung im Speicher, Weiterleitung ohne Anmeldung, Seiten je Rolle |
+| `src/komponenten` | Formularfelder mit Fehlern, Fehlerübersicht, Meldungen (Live-Regionen), Seitenrahmen |
+| `src/seiten` | eine Datei je Seite |
+| `src/test` | Tests mit simulierter API und axe-Prüfung |
+
+Im Docker-Build wird die Oberfläche gebaut und von Spring Boot mit ausgeliefert. Oberfläche und API
+kommen also vom selben Server, CORS ist nicht nötig.
 
 Datenbank ist **PostgreSQL**. Das Schema liegt als SQL in `src/main/resources/db/migration` und
 wird beim Start von **Flyway** angewendet. Hibernate prüft nur noch, ob Entities und Tabellen
@@ -125,12 +148,49 @@ zusammenpassen (`ddl-auto=validate`).
 - **Benutzer in PostgreSQL, Passwörter mit BCrypt:** In der Tabelle steht nur der Hash mit
   Verfahren als Präfix (`{bcrypt}...`), so lässt sich das Verfahren später wechseln. Benutzer
   werden deaktiviert statt gelöscht.
+- **Anmeldung in der Oberfläche:** Die Zugangsdaten liegen nur im Arbeitsspeicher der Seite, nicht im
+  `localStorage` und nicht in einem Cookie. Der Browser schickt also nichts von selbst mit, CSRF-Schutz
+  bleibt unnötig. Nachteil: Nach dem Neuladen muss man sich neu anmelden. Die Oberfläche schickt
+  `X-Requested-With`, dann lässt der Server den `WWW-Authenticate`-Header weg und der Browser öffnet
+  keinen eigenen Anmeldedialog. Das Menü richtet sich nach der Rolle, die Rechte prüft aber nur der Server.
+- **Content Security Policy:** Skripte nur vom eigenen Server, keine Einbettung in fremde Seiten.
 - **Demopasswörter:** `leitstand`/`leitstand` und `fahrer`/`fahrer` sind nur zum Ausprobieren
   gedacht und lassen sich vor dem ersten Start über `LAGER_PASSWORT_LEITSTAND` und
   `LAGER_PASSWORT_FAHRER` ersetzen. Eine Benutzerverwaltung per API gibt es noch nicht.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
   mehrere Plätze verteilt; Auslagerungen werden sofort abgebucht und ohne Scan
   abgeschlossen; die Entfernung ist Gang + Regal; keine Chargen, kein MHD.
+
+## Barrierefreiheit
+
+Ziel ist WCAG 2.2 Stufe AA. Umgesetzt und zum großen Teil automatisch getestet:
+
+- **Struktur:** Sprunglink zum Inhalt, Landmarken (`header`, `nav`, `main`), genau eine `h1` je Seite,
+  sprechender Fenstertitel, Tabellen mit `caption` und Kopfzellen (`scope`), Listen als Listen.
+- **Fokus:** Nach einem Seitenwechsel springt der Fokus auf die Überschrift. Ändert eine Aktion die
+  Knöpfe (z. B. „Starten“ wird zum Scanformular), landet er auf der Karte statt im Nichts. Neue
+  Positionen bekommen den Fokus, nach dem Entfernen geht er auf „Position hinzufügen“. Knöpfe
+  werden nie `disabled`, weil sie sonst den Fokus verlieren; Doppelklicks fängt der Code ab.
+- **Meldungen:** Erfolg und Hinweise in einer `status`-Region, Fehler in einer `alert`-Region.
+  Beide stehen immer im DOM, sonst würde ein Screenreader die erste Meldung oft überhören.
+- **Formulare:** Jedes Feld hat ein sichtbares Label. Pflichtfelder sind im Text markiert. Fehler
+  stehen am Feld (`aria-invalid`, `aria-describedby`) und in einer Übersicht, die den Fokus bekommt
+  und per Link zum Feld springt. Die Feldfehler kommen aus der Bean Validation des Servers, die
+  Regeln stehen also nur an einer Stelle.
+- **Nicht nur Farbe:** Status, Priorität und Sperre stehen als Text da, Farbe kommt nur hinzu.
+  Die aktive Seite im Menü ist fett und unterstrichen.
+- **Sehen und Bedienen:** Kontraste ≥ 4,5 : 1 (Text) und ≥ 3 : 1 (Rahmen, Fokus) in Hell und Dunkel,
+  deutlich sichtbarer Fokusrahmen, Schaltflächen mindestens 44 px hoch (Handschuhe, Handterminal),
+  Schriftgröße in `rem` (Browser-Einstellung zählt), schmale Bildschirme ohne waagerechtes Scrollen
+  außer in Tabellen. `prefers-reduced-motion` und der Windows-Kontrastmodus werden berücksichtigt.
+- **Handscanner:** Ein Scanner schickt nach dem Code ein Enter. Im Feld „Barcode der Ware“ springt
+  Enter deshalb zum Platzfeld, statt das halbe Formular abzuschicken.
+
+**Geprüft:** `eslint-plugin-jsx-a11y` (strict) beim Schreiben; **axe-core** auf allen Seiten in beiden
+Rollen in den Tests; Tests für Fokus, Live-Regionen und Feldbeschreibungen; ein Durchlauf in Chromium
+nur per Tastatur, schmal und im Dunkelmodus.
+**Nicht geprüft:** ein Test mit echten Screenreadern (NVDA, Orca, VoiceOver) und mit Menschen, die
+darauf angewiesen sind. Die Kontraste habe ich von Hand berechnet, jsdom kann sie nicht messen.
 
 ## Starten
 
@@ -152,11 +212,22 @@ Die Zugangsdaten sind Vorgaben für die lokale Entwicklung und lassen sich über
 `LAGER_DB_BENUTZER` und `LAGER_DB_PASSWORT` ersetzen (Compose: nur das Passwort, vor dem ersten
 Start setzen).
 
+Die Oberfläche läuft im Docker-Start unter <http://localhost:8080>. Zum Entwickeln an der
+Oberfläche (Node.js 22.12 oder neuer; lädt bei Änderungen sofort neu, API-Aufrufe gehen an Port 8080):
+
+```bash
+cd frontend
+npm ci
+npm run dev        # http://localhost:5173
+npm run check      # Lint, Tests, Build
+```
+
 Die API verlangt eine Anmeldung. Demobenutzer: `leitstand` / `leitstand` (darf alles) und
 `fahrer` / `fahrer` (Staplerfahrer). In der Swagger-UI über den Knopf „Authorize“ anmelden.
 
 Danach:
 
+- Oberfläche: <http://localhost:8080> (nur im Docker-Start, sonst `npm run dev`)
 - API: <http://localhost:8080/api/...>
 - Swagger-UI: <http://localhost:8080/swagger-ui.html>
 - Health: <http://localhost:8080/actuator/health> (ohne Anmeldung)
@@ -243,13 +314,14 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 ## Tests
 
 ```bash
-./mvnw verify
+./mvnw verify                      # Backend
+cd frontend && npm run check       # Oberfläche
 ```
 
 Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
 räumt es danach wieder weg.
 
-56 Tests, alle grün:
+**Backend:** 59 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
@@ -265,10 +337,18 @@ räumt es danach wieder weg.
 - **Sicherheitstest** mit echten Benutzern aus PostgreSQL: ohne Anmeldung, falsches Passwort,
   unbekannter und deaktivierter Benutzer ergeben `401`; der Fahrer darf lesen und Transporte
   abarbeiten, bekommt aber `403` bei Stammdaten, Wareneingang, Priorität, Sperre und Klärfall;
-  das Passwort steht nur als BCrypt-Hash in der Datenbank.
+  das Passwort steht nur als BCrypt-Hash in der Datenbank; `/api/ich`, kein Browser-Dialog bei
+  Anfragen aus der Oberfläche, Seiten der Oberfläche ohne Anmeldung, CSP-Header.
 - **Integrationstests** (`@SpringBootTest` + MockMvc): kompletter Ablauf von Wareneingang
   über Kommissionierung bis zum Transport, Klärplatz, und die HTTP-Codes bei
   ungültigen Eingaben (400), unbekannten Artikeln (404) und Konflikten (409).
+
+**Oberfläche:** 37 Tests (Vitest, Testing Library, axe-core) gegen eine simulierte API. Sie bedienen die
+Seite wie ein Mensch, über Rollen und Beschriftungen statt CSS-Klassen. Dabei geht es um Anmeldung
+und Weiterleitung, die Menüs je Rolle, Starten, Scannen (auch falsch) und Umleiten, Priorität,
+Feldfehler mit Fokus auf der Übersicht, Positionen hinzufügen und entfernen, Klärfälle, Platzsperre,
+Ladefehler mit erneutem Versuch und den API-Client (UTF-8 in der Anmeldung, Problem Details).
+Dazu kommt die axe-Prüfung auf 10 Seiten.
 
 ## Was ich dabei gelernt habe
 
@@ -283,6 +363,9 @@ räumt es danach wieder weg.
 - Dass Spring Security als Filter **vor** den Controllern läuft: `401`/`403` entstehen dort, deshalb
   greift `@RestControllerAdvice` nicht und die Problem-Details-Antwort wird im Filter geschrieben.
 - Den Unterschied zwischen `401` (wer bist du?) und `403` (du darfst das nicht).
+- Dass Barrierefreiheit vor allem Fokus und Ansagen bedeutet: Was sich nach einer Aktion ändert, muss
+  ein Screenreader-Nutzer auch erfahren. Die Tests dafür haben zwei echte Fehler gefunden (Rücksprung
+  nach der Anmeldung, verlorener Abmelde-Hinweis).
 
 ## Mögliche Erweiterungen
 
@@ -291,6 +374,8 @@ räumt es danach wieder weg.
 - Klärfall „erneut versuchen“, z. B. Kommissionierauftrag nach Nachschub neu prüfen
 - Protokollieren, welcher Benutzer gescannt oder einen Klärfall erledigt hat
 - Benutzerverwaltung per API (anlegen, deaktivieren, Passwort ändern)
+- Oberfläche: Lagerplätze anlegen und Maße nachtragen (bisher nur per API), Test mit Screenreadern
+- Schutz vor durchprobierten Passwörtern (Sperre nach Fehlversuchen)
 
 ## Hinweis
 

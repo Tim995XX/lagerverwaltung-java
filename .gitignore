@@ -1,5 +1,7 @@
 # Build
 target/
+# Die gebaute Oberfläche kommt nur im Docker-Build hierher
+src/main/resources/static/
 
 # Alte H2-Datenbankdateien
 data/

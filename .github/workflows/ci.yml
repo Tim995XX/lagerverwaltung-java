@@ -29,8 +29,27 @@ jobs:
       - name: Bauen und testen
         run: ./mvnw -B verify
 
+  oberflaeche:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint (inkl. Barrierefreiheit), Tests (inkl. axe), Build
+        run: npm run check
+
   docker:
-    needs: test
+    needs: [test, oberflaeche]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
