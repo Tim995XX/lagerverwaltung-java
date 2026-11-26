@@ -15,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -29,10 +30,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Integrationstests: kompletter Spring-Kontext mit PostgreSQL (Testcontainers),
  * Aufrufe laufen über MockMvc durch Controller, Service und Repository.
+ * Angemeldet als Leitstand, der alles darf; die Rechte prüft {@link SicherheitTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(PostgresTestKonfiguration.class)
+@WithMockUser(roles = "LEITSTAND")
 class LagerApiIntegrationTest {
 
     @Autowired MockMvc mockMvc;

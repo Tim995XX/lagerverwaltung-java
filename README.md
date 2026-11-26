@@ -59,10 +59,14 @@ Transportauftrag:  OFFEN ──start──▶ IN_ARBEIT ──abschluss (Auslage
 - **Transportaufträge:** Liste in Abarbeitungsreihenfolge, Statuswechsel mit Prüfung,
   Umpriorisieren durch den Leitstand.
 - **Klärplatz:** offene Klärfälle mit Grund und Beschreibung, Abschluss mit Kommentar.
+- **Anmeldung und Rollen** (Spring Security): Der **Leitstand** darf alles, der **Staplerfahrer**
+  darf lesen und Transportaufträge abarbeiten (starten, scannen, abschließen, umleiten), aber
+  keine Stammdaten, Prioritäten oder Klärfälle ändern. Ohne Anmeldung `401`, ohne Recht `403`.
 - **Fehlerbehandlung:** zentral per `@RestControllerAdvice`, Antworten im Format
-  „Problem Details“ (RFC 9457) mit passenden HTTP-Codes (400, 404, 409).
+  „Problem Details“ (RFC 9457) mit passenden HTTP-Codes (400, 401, 403, 404, 409).
 - **Bean Validation** auf allen Eingaben, **OpenAPI/Swagger-UI**, Health-Endpunkt.
-- **Demodaten:** Beim ersten Start werden 3 Artikel, 12 Plätze und 3 Wareneingänge angelegt.
+- **Demodaten:** Beim ersten Start werden 3 Artikel, 12 Plätze, 3 Wareneingänge und je Rolle ein
+  Benutzer angelegt.
 
 ## Architektur
 
@@ -75,6 +79,7 @@ Klassische Schichten: Controller → Service → Repository → Datenbank.
 | `service` | Geschäftslogik und Transaktionen (`@Transactional`) |
 | `repository` | Spring-Data-JPA-Interfaces, eine eigene JPQL-Abfrage für leere Plätze |
 | `domain` | JPA-Entities und Enums; Regeln, die nur ein Objekt betreffen (z. B. Statuswechsel), stehen direkt in der Entity |
+| `sicherheit` | Rechte je Rolle (`SicherheitsKonfiguration`), Benutzer aus der Datenbank, Demobenutzer |
 | `fehler` | Fachliche Exceptions (`NichtGefundenException`, `KonfliktException`) |
 
 Datenbank ist **PostgreSQL**. Das Schema liegt als SQL in `src/main/resources/db/migration` und
@@ -110,9 +115,22 @@ zusammenpassen (`ddl-auto=validate`).
   zusammen oder gar nicht.
 - **Sperre nur für Einlagerungen:** Ware auf einem gesperrten Platz darf weiter abgeholt werden.
 - **Grenze des Scans:** Er belegt, welche Codes gescannt wurden, nicht wo die Ware wirklich steht.
+- **Rechte an einer Stelle:** Wer was darf, steht nach URL und HTTP-Methode in
+  `SicherheitsKonfiguration`, nicht verteilt über die Controller. Unbekannte Pfade sind gesperrt
+  (`denyAll`), damit ein neuer Endpunkt nicht versehentlich offen ist.
+- **HTTP Basic ohne Session:** Jede Anfrage bringt Benutzername und Passwort mit, der Server merkt
+  sich nichts. Das ist für eine API einfach und gut testbar, braucht aber zwingend HTTPS (in
+  Produktion vor der Anwendung, z. B. im Reverse Proxy). Weil kein Cookie im Spiel ist, ist der
+  CSRF-Schutz abgeschaltet; für eine Browser-Oberfläche mit Login-Cookie muss das neu entschieden werden.
+- **Benutzer in PostgreSQL, Passwörter mit BCrypt:** In der Tabelle steht nur der Hash mit
+  Verfahren als Präfix (`{bcrypt}...`), so lässt sich das Verfahren später wechseln. Benutzer
+  werden deaktiviert statt gelöscht.
+- **Demopasswörter:** `leitstand`/`leitstand` und `fahrer`/`fahrer` sind nur zum Ausprobieren
+  gedacht und lassen sich vor dem ersten Start über `LAGER_PASSWORT_LEITSTAND` und
+  `LAGER_PASSWORT_FAHRER` ersetzen. Eine Benutzerverwaltung per API gibt es noch nicht.
 - **Vereinfachungen:** Ein Platz hält nur einen Artikel; eine Anlieferung wird nicht auf
   mehrere Plätze verteilt; Auslagerungen werden sofort abgebucht und ohne Scan
-  abgeschlossen; die Entfernung ist Gang + Regal; keine Chargen, kein MHD, keine Benutzer.
+  abgeschlossen; die Entfernung ist Gang + Regal; keine Chargen, kein MHD.
 
 ## Starten
 
@@ -134,57 +152,63 @@ Die Zugangsdaten sind Vorgaben für die lokale Entwicklung und lassen sich über
 `LAGER_DB_BENUTZER` und `LAGER_DB_PASSWORT` ersetzen (Compose: nur das Passwort, vor dem ersten
 Start setzen).
 
+Die API verlangt eine Anmeldung. Demobenutzer: `leitstand` / `leitstand` (darf alles) und
+`fahrer` / `fahrer` (Staplerfahrer). In der Swagger-UI über den Knopf „Authorize“ anmelden.
+
 Danach:
 
 - API: <http://localhost:8080/api/...>
 - Swagger-UI: <http://localhost:8080/swagger-ui.html>
-- Health: <http://localhost:8080/actuator/health>
+- Health: <http://localhost:8080/actuator/health> (ohne Anmeldung)
 
 ## Beispiele mit curl
 
 ```bash
+L='-u leitstand:leitstand'   # Leitstand
+F='-u fahrer:fahrer'         # Staplerfahrer
+
 # Bestand je Lagerplatz (Demodaten)
-curl -s localhost:8080/api/bestaende
+curl -s $L localhost:8080/api/bestaende
 
 # Wareneingang: 20 Stück Apfelsaft
-curl -s -X POST localhost:8080/api/wareneingaenge \
+curl -s $L -X POST localhost:8080/api/wareneingaenge \
   -H 'Content-Type: application/json' \
   -d '{"artikelNummer": "1002", "menge": 20}'
 # → {"ergebnis":"PLATZ_RESERVIERT","lagerplatz":"01-01-2","transportauftragId":4,"klaerfallId":null,
 #    "begruendung":"kleinster passender Platz, dann kurzer Weg"}
 
-# Fahren, abstellen, scannen: erst jetzt wird gebucht
-curl -s -X POST localhost:8080/api/transportauftraege/4/start
-curl -s -X POST localhost:8080/api/transportauftraege/4/scan \
+# Der Fahrer fährt, stellt ab und scannt: erst jetzt wird gebucht
+curl -s $F -X POST localhost:8080/api/transportauftraege/4/start
+curl -s $F -X POST localhost:8080/api/transportauftraege/4/scan \
   -H 'Content-Type: application/json' -d '{"artikelNummer": "1002", "lagerplatzCode": "01-01-2"}'
 
 # Platz beschädigt? Vor dem Scan umleiten (gleicher Aufruf statt des Scans)
-# curl -s -X POST localhost:8080/api/transportauftraege/4/umleiten \
+# curl -s $F -X POST localhost:8080/api/transportauftraege/4/umleiten \
 #   -H 'Content-Type: application/json' -d '{"grund": "Regalboden beschädigt"}'
 
 # Zu groß für jeden Platz → Klärplatz
-curl -s -X POST localhost:8080/api/wareneingaenge \
+curl -s $L -X POST localhost:8080/api/wareneingaenge \
   -H 'Content-Type: application/json' \
   -d '{"artikelNummer": "1001", "menge": 999}'
 # → {"ergebnis":"KLAERPLATZ","lagerplatz":null,"transportauftragId":null,"klaerfallId":1,"begruendung":null}
 
 # Kommissionierauftrag mit hoher Priorität
-curl -s -X POST localhost:8080/api/kommissionierauftraege \
+curl -s $L -X POST localhost:8080/api/kommissionierauftraege \
   -H 'Content-Type: application/json' \
   -d '{"positionen": [{"artikelNummer": "1001", "menge": 30}], "prioritaet": "HOCH"}'
 
-# Offene Transportaufträge in Abarbeitungsreihenfolge
-curl -s 'localhost:8080/api/transportauftraege?status=OFFEN'
+# Offene Transportaufträge in Abarbeitungsreihenfolge (sieht auch der Fahrer)
+curl -s $F 'localhost:8080/api/transportauftraege?status=OFFEN'
 
-# Auslagerung umpriorisieren, starten, abschließen
-curl -s -X PUT  localhost:8080/api/transportauftraege/5/prioritaet \
+# Leitstand priorisiert um, der Fahrer startet und schließt ab
+curl -s $L -X PUT localhost:8080/api/transportauftraege/5/prioritaet \
   -H 'Content-Type: application/json' -d '{"prioritaet": "HOCH"}'
-curl -s -X POST localhost:8080/api/transportauftraege/5/start
-curl -s -X POST localhost:8080/api/transportauftraege/5/abschluss
+curl -s $F -X POST localhost:8080/api/transportauftraege/5/start
+curl -s $F -X POST localhost:8080/api/transportauftraege/5/abschluss
 
 # Klärplatz ansehen und einen Fall abschließen
-curl -s localhost:8080/api/klaerfaelle
-curl -s -X POST localhost:8080/api/klaerfaelle/1/erledigen \
+curl -s $L localhost:8080/api/klaerfaelle
+curl -s $L -X POST localhost:8080/api/klaerfaelle/1/erledigen \
   -H 'Content-Type: application/json' -d '{"kommentar": "Ware auf zwei Plätze verteilt"}'
 ```
 
@@ -210,6 +234,12 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 | `/api/transportauftraege/{id}/prioritaet` | PUT | Umpriorisieren |
 | `/api/klaerfaelle`, `/{id}/erledigen` | GET (`?erledigt=`), POST | Klärplatz |
 
+| Rolle | darf |
+|---|---|
+| `LEITSTAND` | alles |
+| `STAPLERFAHRER` | alle `GET`; `POST` auf `/api/transportauftraege/{id}/start`, `/scan`, `/abschluss`, `/umleiten` |
+| ohne Anmeldung | nur Health, Swagger-UI und OpenAPI-Beschreibung |
+
 ## Tests
 
 ```bash
@@ -219,7 +249,7 @@ Fehler kommen einheitlich als Problem Details, z. B. ein unerlaubter Statuswechs
 Docker muss laufen: **Testcontainers** startet für die Datenbanktests ein echtes PostgreSQL und
 räumt es danach wieder weg.
 
-47 Tests, alle grün:
+56 Tests, alle grün:
 
 - **Unit-Tests ohne Spring** (JUnit 5, Mockito, AssertJ): Statuswechsel und Kapazitätsregeln
   in den Entities; Platzwahl im Wareneingang; Kommissionierung über mehrere Plätze,
@@ -232,6 +262,10 @@ räumt es danach wieder weg.
 - **Migrationstest:** V2 läuft auch auf einer Datenbank mit V1-Daten.
 - **Test gleichzeitiger Buchungen:** Zwei Wareneingänge wollen denselben leeren Platz; die zweite
   Anfrage bekommt `409`, bucht nichts und gelingt beim nächsten Versuch.
+- **Sicherheitstest** mit echten Benutzern aus PostgreSQL: ohne Anmeldung, falsches Passwort,
+  unbekannter und deaktivierter Benutzer ergeben `401`; der Fahrer darf lesen und Transporte
+  abarbeiten, bekommt aber `403` bei Stammdaten, Wareneingang, Priorität, Sperre und Klärfall;
+  das Passwort steht nur als BCrypt-Hash in der Datenbank.
 - **Integrationstests** (`@SpringBootTest` + MockMvc): kompletter Ablauf von Wareneingang
   über Kommissionierung bis zum Transport, Klärplatz, und die HTTP-Codes bei
   ungültigen Eingaben (400), unbekannten Artikeln (404) und Konflikten (409).
@@ -246,13 +280,17 @@ räumt es danach wieder weg.
   Integrationstests mit echtem Kontext (langsamer, finden Fehler in Abfragen und Konfiguration).
 - Dass ein fachlicher Sonderfall wie der Klärplatz kein technischer Fehler ist und anders
   behandelt werden sollte als eine ungültige Anfrage.
+- Dass Spring Security als Filter **vor** den Controllern läuft: `401`/`403` entstehen dort, deshalb
+  greift `@RestControllerAdvice` nicht und die Problem-Details-Antwort wird im Filter geschrieben.
+- Den Unterschied zwischen `401` (wer bist du?) und `403` (du darfst das nicht).
 
 ## Mögliche Erweiterungen
 
 - Auslagerungen ebenfalls per Scan bestätigen
 - Anlieferungen auf mehrere Plätze verteilen
 - Klärfall „erneut versuchen“, z. B. Kommissionierauftrag nach Nachschub neu prüfen
-- Authentifizierung (Spring Security) und Rollen, z. B. Leitstand vs. Staplerfahrer
+- Protokollieren, welcher Benutzer gescannt oder einen Klärfall erledigt hat
+- Benutzerverwaltung per API (anlegen, deaktivieren, Passwort ändern)
 
 ## Hinweis
 

@@ -29,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -85,7 +86,9 @@ class GleichzeitigeBuchungTest {
 
     private MvcResult wareneingang() {
         try {
-            return mockMvc.perform(post("/api/wareneingaenge").contentType(MediaType.APPLICATION_JSON)
+            // Anmeldung hängt an der Anfrage, nicht am Thread: läuft auch in supplyAsync
+            return mockMvc.perform(post("/api/wareneingaenge").with(user("leitstand").roles("LEITSTAND"))
+                    .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                             {"artikelNummer": "1001", "menge": 5}""")).andReturn();
         } catch (Exception e) {

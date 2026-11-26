@@ -23,6 +23,8 @@ services:
     environment:
       LAGER_DB_URL: jdbc:postgresql://db:5432/lager
       LAGER_DB_PASSWORT: ${LAGER_DB_PASSWORT:-lager}
+      LAGER_PASSWORT_LEITSTAND: ${LAGER_PASSWORT_LEITSTAND:-leitstand}
+      LAGER_PASSWORT_FAHRER: ${LAGER_PASSWORT_FAHRER:-fahrer}
     ports:
       - "8080:8080"
     healthcheck:
