@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -121,6 +122,32 @@ class SicherheitTest {
         mockMvc.perform(json(put("/api/transportauftraege/999/prioritaet"), "{\"prioritaet\": \"HOCH\"}")
                         .with(LEITSTAND))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void ichNenntNameUndRolle() throws Exception {
+        mockMvc.perform(get("/api/ich").with(FAHRER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("fahrer"))
+                .andExpect(jsonPath("$.rolle").value("STAPLERFAHRER"));
+        mockMvc.perform(get("/api/ich").with(LEITSTAND)).andExpect(jsonPath("$.rolle").value("LEITSTAND"));
+    }
+
+    @Test
+    void anfrageAusDerOberflaecheOeffnetKeinenBrowserDialog() throws Exception {
+        mockMvc.perform(get("/api/ich").header("X-Requested-With", "XMLHttpRequest")
+                        .with(httpBasic("fahrer", "falsch")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("WWW-Authenticate"));
+    }
+
+    @Test
+    void seitenDerOberflaecheSindOhneAnmeldungErreichbarUndHabenCsp() throws Exception {
+        // Im Test gibt es keine gebaute index.html, deshalb zählt nur: keine 401/403
+        int status = mockMvc.perform(get("/transporte")).andReturn().getResponse().getStatus();
+        assertThat(status).isNotIn(401, 403);
+        mockMvc.perform(get("/api/ich").with(FAHRER))
+                .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self'")));
     }
 
     @Test
